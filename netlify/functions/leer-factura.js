@@ -23,26 +23,35 @@ exports.handler = async (event) => {
   if (!imagen) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Falta la imagen' }) };
 
   const catalogoTxt = materias.length
-    ? `\n\nPara AYUDARTE a normalizar, este es el catálogo de Pangea (es solo una referencia; NO fuerces los nombres a esta lista si no coinciden claramente):\n${materias.join(', ')}`
+    ? `\n\nCatálogo de Pangea SOLO como referencia ortográfica. NO cambies un producto por otro del catálogo: si la factura dice "Arándano granel", la respuesta es "Arándano granel", nunca "Arándanos congelados". Lista:\n${materias.join(', ')}`
     : '';
 
-  const prompt = `Eres un experto leyendo facturas y albaranes de proveedores de un restaurante en España. Tu trabajo es TRANSCRIBIR con precisión lo que aparece, sin inventar.
+  const prompt = `Eres un experto leyendo albaranes y facturas de proveedores de un restaurante en España. TRANSCRIBE lo que ves. NO inventes ni sustituyas productos.
 
-Analiza esta factura/albarán y extrae los datos en JSON. Responde SOLO con el JSON, sin explicaciones ni markdown.
+Devuelve SOLO un JSON, sin explicaciones ni markdown.
 
-REGLAS CRÍTICAS:
-- Transcribe el nombre del producto EXACTAMENTE como aparece en la factura. NO inventes ni sustituyas por productos parecidos. Si pone "RELAVIT AUTODISH", escribe "RELAVIT AUTODISH", no "Lavavajillas".
-- Lee la columna de CANTIDAD con mucho cuidado: suele ser un número a la izquierda del precio. Cada línea de producto tiene su cantidad. Si dudas entre cantidad y precio, la cantidad suele ser el número más pequeño y redondo.
-- Si una línea no tiene cantidad clara, pon null en cantidad, pero NO te la saltes.
-- Ignora SOLO las líneas que claramente no son productos: totales, subtotales, IVA, base imponible, portes, descuentos, formas de pago.
-- Números con coma decimal española: "2,5" -> 2.5.
+CÓMO ELEGIR LA CANTIDAD (muy importante):
+Estas facturas suelen tener VARIAS columnas de números: "%", "BULTOS", "KG BRUTO", "KG NETO", "PRECIO", "IMPORTE". Debes tomar la cantidad REAL de mercancía en este orden de preferencia:
+1. Si hay columna "KG NETO" (o "NETO"), usa ESE valor y unidad "kg".
+2. Si no, usa "KG BRUTO" y unidad "kg".
+3. Si el producto va por unidades y solo hay "BULTOS"/"UDS", usa ese y unidad "ud".
+NUNCA uses las columnas de PRECIO ni IMPORTE como cantidad. NO uses BULTOS si existe KG NETO.
 
-Formato exacto:
+NOMBRES:
+- Copia la descripción tal cual (ej. "ALBAHACA Bdja", "RUCULA 100Gr", "SANDIA PALOT"). Limpia solo abreviaturas obvias de formato pero NO cambies el producto.
+
+LOTE:
+- Si hay una columna "LOTE" con un número largo, cópialo en "lote".
+
+Ignora líneas que no son productos: bases, IVA, cuotas, totales, formas de pago, IBAN.
+Coma decimal española: "4,50" -> 4.5
+
+Formato:
 {
-  "proveedor": "nombre del proveedor tal como aparece en la cabecera",
+  "proveedor": "de la cabecera",
   "fecha": "YYYY-MM-DD o vacío",
   "productos": [
-    {"nombre": "texto exacto de la factura", "cantidad": número o null, "unidad": "kg/g/L/ml/ud/cajas/packs", "lote": "si aparece, si no vacío", "caducidad": "YYYY-MM-DD o vacío"}
+    {"nombre": "descripción exacta", "cantidad": número o null, "unidad": "kg/ud/L/cajas", "lote": "de la columna LOTE si existe", "caducidad": ""}
   ]
 }${catalogoTxt}`;
 
