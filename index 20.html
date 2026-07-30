@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1A3A1C">
+<title>Pangea · Inventario</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--verde:#1A3A1C;--verde2:#2C5F2E;--naranja:#F4A261;--crema:#FDF3E7;--rojo:#C0392B;
+        --gris:#6B6B6B;--tan:#D4B896;--tinta:#1A1A1A;--bg:#F6F1E7;--azul:#3b7dd8;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--tinta);line-height:1.45;padding-bottom:40px;}
+  header{position:sticky;top:0;z-index:30;background:var(--verde);color:#fff;padding:12px 15px 10px;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+  .brand{display:flex;align-items:center;justify-content:space-between;}
+  .brand h1{font-size:16.5px;margin:0;font-weight:800;letter-spacing:.3px;}
+  .brand .sp{font-size:11.5px;color:var(--naranja);font-weight:600;}
+  .who{font-size:11px;color:#cfe0d0;cursor:pointer;text-decoration:underline;}
+  .tabs{display:flex;gap:6px;margin-top:10px;overflow-x:auto;}
+  .tab{flex:0 0 auto;border:none;border-radius:16px;padding:7px 14px;font-size:12.5px;font-weight:700;background:rgba(255,255,255,.14);color:#dfe9df;cursor:pointer;white-space:nowrap;}
+  .tab.active{background:var(--naranja);color:var(--verde);}
+  .wrap{padding:12px;max-width:760px;margin:0 auto;}
+  #search{width:100%;border:1.5px solid var(--tan);border-radius:11px;padding:10px 13px;font-size:15px;margin-bottom:12px;background:#fff;}
+  #search:focus{outline:none;border-color:var(--verde2);}
+  .card{background:#fff;border:1px solid var(--tan);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+  .row{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid #f0eadd;}
+  .row:last-child{border-bottom:none;}
+  .row .nm{flex:1;font-size:14px;font-weight:600;}
+  .row .prov{font-size:10.5px;color:var(--gris);font-weight:400;}
+  .stock{font-size:15px;font-weight:800;color:var(--verde2);text-align:right;white-space:nowrap;}
+  .stock.low{color:var(--rojo);}
+  .stock.zero{color:var(--gris);}
+  .lotes{font-size:10.5px;color:var(--gris);margin-top:2px;}
+  .badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:7px;}
+  .badge.cad{background:#fdecea;color:var(--rojo);}
+  .badge.ok{background:#e3f2e3;color:var(--verde2);}
+  h3.sec{font-size:12.5px;color:var(--verde2);text-transform:uppercase;letter-spacing:.4px;margin:6px 3px 8px;font-weight:800;}
+  label{display:block;font-size:12px;font-weight:700;color:var(--gris);margin:10px 3px 4px;}
+  input,select,textarea{width:100%;border:1.5px solid var(--tan);border-radius:10px;padding:11px;font-size:15px;background:#fff;font-family:inherit;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--verde2);}
+  .btn{width:100%;border:none;border-radius:12px;font-size:15px;font-weight:800;padding:14px;cursor:pointer;margin-top:12px;}
+  .btn.p{background:var(--verde2);color:#fff;}
+  .btn.s{background:#fff;color:var(--verde2);border:1.5px solid var(--tan);}
+  .btn.o{background:var(--naranja);color:var(--verde);}
+  .btn:active{filter:brightness(.94);}
+  .btn:disabled{opacity:.4;}
+  .foto{width:100%;border-radius:10px;margin:8px 0;}
+  .fotoph{width:100%;height:120px;border:2px dashed var(--tan);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--gris);font-size:13px;background:#faf6ee;margin:8px 0;}
+  .lote-item{border:1px solid var(--tan);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--crema);}
+  .lote-item .top{display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;}
+  .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px;}
+  .lgrid input{padding:8px;font-size:13.5px;}
+  .del{border:none;background:transparent;color:var(--rojo);font-size:16px;cursor:pointer;}
+  .ing{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0eadd;font-size:13.5px;}
+  .ing .q{font-weight:800;color:var(--verde2);white-space:nowrap;}
+  .ing select{padding:6px;font-size:12px;}
+  .empty{text-align:center;color:var(--gris);padding:36px 18px;font-size:14px;}
+  .prodrow{padding:11px 13px;border-bottom:1px solid #f0eadd;cursor:pointer;}
+  .prodrow:active{background:var(--crema);}
+  .prodrow .t{font-size:14px;font-weight:700;}
+  .prodrow .s{font-size:11px;color:var(--gris);}
+  .traza{background:var(--crema);border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;}
+  .traza b{color:var(--verde2);}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--verde);color:#fff;padding:11px 18px;border-radius:22px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:80;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:88%;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;display:none;align-items:center;justify-content:center;padding:18px;}
+  .modal.show{display:flex;}
+  .sheet{background:#fff;width:100%;max-width:440px;border-radius:16px;padding:18px;max-height:88vh;overflow:auto;}
+  .sheet h3{margin:0 0 4px;color:var(--verde);font-size:17px;}
+  .mbtns{display:flex;gap:10px;margin-top:14px;}
+  .mbtns button{flex:1;border:none;border-radius:11px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;}
+  .cancel{background:#eee;color:var(--gris);}
+  .ok{background:var(--verde2);color:#fff;}
+  .center{padding:40px;text-align:center;color:var(--gris);}
+  .login{max-width:420px;margin:8vh auto 0;padding:0 18px;text-align:center;}
+  .login h2{color:var(--verde);font-size:20px;}
+  .pbtn{width:100%;border:1.5px solid var(--tan);background:#fff;border-radius:13px;padding:15px;font-size:16px;font-weight:700;color:var(--verde2);cursor:pointer;margin-bottom:9px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div><h1>PANGEA BRUNCH</h1><div class="sp">Inventario y trazabilidad</div></div>
+    <span class="who" id="who" style="display:none"></span></div>
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="tab active" data-t="inv">📦 Stock</button>
+    <button class="tab" data-t="rec">📥 Recibir</button>
+    <button class="tab" data-t="prod">🍳 Producir</button>
+    <button class="tab" data-t="traz">🔍 Trazabilidad</button>
+  </div>
+</header>
+<div id="app"><div class="center">Conectando…</div></div>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const SUPABASE_URL="https://euksmojqeiijfhbbavnn.supabase.co", SUPABASE_KEY="sb_publishable_fQJxpQCYdImxP9bsriBdSg_Px0JYdVe";
+const RECETAS = [{"c":"PB-OBR-DUL-001","n":"PAN DE MASA MADRE","i":[{"n":"LEAVEN — preparar la noche anterior","q":null,"u":"LEAVEN — preparar la noche anterior"},{"n":"Masa madre de trigo","q":300.0,"u":"gr"},{"n":"Agua a 26°C","q":1600.0,"u":"gr"},{"n":"Harina de fuerza","q":400.0,"u":"gr"},{"n":"Harina floja","q":400.0,"u":"gr"},{"n":"Harina integral","q":800.0,"u":"gr"},{"n":"MASA","q":null,"u":"MASA"},{"n":"Agua a 26°C (o fría si hace calor)","q":11200.0,"u":"gr"},{"n":"Leaven","q":3200.0,"u":"gr"},{"n":"Harina de fuerza","q":7200.0,"u":"gr"},{"n":"Harina de fuerza ecológica","q":7200.0,"u":"gr"},{"n":"Harina integral","q":1600.0,"u":"gr"},{"n":"Sal","q":320.0,"u":"gr"}]},{"c":"PB-OBR-DUL-002","n":"PAN BRIOCHE","i":[{"n":"EMPOÍS — preparar el día anterior","q":null,"u":"EMPOÍS — preparar el día anterior"},{"n":"Leche entera","q":2100.0,"u":"gr"},{"n":"Agua","q":950.0,"u":"gr"},{"n":"Harina sfoglia","q":750.0,"u":"gr"},{"n":"MASA BRIOCHE (para 28 panes de 1.100 gr)","q":null,"u":"MASA BRIOCHE (para 28 panes de 1.100 gr)"},{"n":"Leche","q":4400.0,"u":"gr"},{"n":"Levadura fresca","q":350.0,"u":"gr"},{"n":"Harina sfoglia","q":16000.0,"u":"gr"},{"n":"Azúcar","q":1000.0,"u":"gr"},{"n":"Sal","q":220.0,"u":"gr"},{"n":"Huevos","q":73.0,"u":"ud."},{"n":"Mantequilla","q":1600.0,"u":"gr"},{"n":"Empoís","q":3700.0,"u":"gr"}]},{"c":"PB-OBR-DUL-003","n":"PAN PITA CASERO","i":[{"n":"Harina floja","q":2500.0,"u":"gr"},{"n":"Agua a 25°C","q":1250.0,"u":"gr"},{"n":"Levén de trigo","q":250.0,"u":"gr"},{"n":"Yogurt griego","q":250.0,"u":"gr"},{"n":"Azúcar","q":125.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Levadura seca","q":20.0,"u":"gr"}]},{"c":"PB-OBR-DUL-004","n":"PAN DE BURGER","i":[{"n":"EMPOÍS — preparar el día anterior","q":null,"u":"EMPOÍS — preparar el día anterior"},{"n":"Leche entera","q":1250.0,"u":"gr"},{"n":"Agua","q":550.0,"u":"gr"},{"n":"Harina sfoglia","q":450.0,"u":"gr"},{"n":"MASA (para 180 panes de 100 gr)","q":null,"u":"MASA (para 180 panes de 100 gr)"},{"n":"Leche","q":2600.0,"u":"gr"},{"n":"Levadura fresca","q":200.0,"u":"gr"},{"n":"Harina sfoglia","q":9400.0,"u":"gr"},{"n":"Azúcar","q":600.0,"u":"gr"},{"n":"Sal","q":130.0,"u":"gr"},{"n":"Huevos","q":43.0,"u":"ud."},{"n":"Mantequilla","q":950.0,"u":"gr"},{"n":"Empoís","q":2200.0,"u":"gr"},{"n":"DORADURA — preparar aparte (ver ficha PB-OBR-DOC)","q":null,"u":"DORADURA — preparar aparte (ver ficha PB-OBR-DOC)"},{"n":"Doradura","q":null,"u":""}]},{"c":"PB-OBR-DUL-005","n":"DORADURA","i":[{"n":"Yema de huevo","q":200.0,"u":"gr"},{"n":"Leche","q":80.0,"u":"gr"}]},{"c":"PB-OBR-DUL-006","n":"SHOKUPAN","i":[{"n":"YUDANE — preparar el día anterior","q":null,"u":"YUDANE — preparar el día anterior"},{"n":"Harina sfoglia","q":2000.0,"u":"gr"},{"n":"Agua hirviendo","q":1600.0,"u":"gr"},{"n":"MASA (para 20 panes de 1.100 gr)","q":null,"u":"MASA (para 20 panes de 1.100 gr)"},{"n":"Leche","q":6000.0,"u":"gr"},{"n":"Azúcar","q":600.0,"u":"gr"},{"n":"Levadura seca instantánea","q":120.0,"u":"gr"},{"n":"Mantequilla sin sal","q":400.0,"u":"gr"},{"n":"Harina sfoglia","q":8000.0,"u":"gr"},{"n":"Sal","q":200.0,"u":"gr"},{"n":"Yudane","q":null,"u":""}]},{"c":"PB-OBR-DUL-007","n":"BAGEL","i":[{"n":"BIGA — preparar el día anterior","q":null,"u":"BIGA — preparar el día anterior"},{"n":"Harina sfoglia","q":450.0,"u":"gr"},{"n":"Agua tibia","q":225.0,"u":"gr"},{"n":"Levadura instantánea","q":4.0,"u":"gr"},{"n":"STARTER — preparar el día anterior","q":null,"u":"STARTER — preparar el día anterior"},{"n":"Agua caliente","q":200.0,"u":"gr"},{"n":"Harina de centeno","q":200.0,"u":"gr"},{"n":"Starter de centeno","q":80.0,"u":"gr"},{"n":"MASA (para 40 bagels de 120 gr)","q":null,"u":"MASA (para 40 bagels de 120 gr)"},{"n":"Biga","q":670.0,"u":"gr"},{"n":"Harina sfoglia","q":2250.0,"u":"gr"},{"n":"Agua a 25°C","q":1120.0,"u":"gr"},{"n":"Starter","q":225.0,"u":"gr"},{"n":"Sal","q":70.0,"u":"gr"},{"n":"Levadura seca","q":25.0,"u":"gr"},{"n":"Aceite de oliva","q":225.0,"u":"gr"},{"n":"Miel","q":225.0,"u":"gr"},{"n":"Miel (para hervido)","q":200.0,"u":"gr"},{"n":"Mix de semillas","q":null,"u":""}]},{"c":"PB-OBR-DUL-008","n":"PAN SIN GLUTEN","i":[{"n":"DÍA ANTERIOR — ALIMENTAR MASA MADRE DE ARROZ","q":null,"u":"DÍA ANTERIOR — ALIMENTAR MASA MADRE DE ARROZ"},{"n":"Masa madre de arroz existente","q":null,"u":""},{"n":"Harina de arroz integral","q":600.0,"u":"gr"},{"n":"Agua templada","q":600.0,"u":"gr"},{"n":"MASA (para 9 panes de ~1 kg)","q":null,"u":"MASA (para 9 panes de ~1 kg)"},{"n":"Masa madre de arroz","q":1200.0,"u":"gr"},{"n":"Azúcar","q":60.0,"u":"gr"},{"n":"Agua (para masa madre)","q":450.0,"u":"gr"},{"n":"Agua (para psyllium)","q":720.0,"u":"gr"},{"n":"Psyllium","q":60.0,"u":"gr"},{"n":"Harina de sarraceno","q":390.0,"u":"gr"},{"n":"Fécula de patata","q":300.0,"u":"gr"},{"n":"Harina de arroz integral","q":270.0,"u":"gr"},{"n":"Sal","q":30.0,"u":"gr"},{"n":"Vinagre de arroz","q":36.0,"u":"gr"}]},{"c":"PB-OBR-DUL-009","n":"MERMELADA CASERA","i":[{"n":"Mix de frutos rojos","q":5000.0,"u":"gr"},{"n":"Azúcar","q":3125.0,"u":"gr"},{"n":"Glucosa","q":330.0,"u":"gr"},{"n":"Pectina","q":42.0,"u":"gr"},{"n":"Ácido cítrico","q":42.0,"u":"gr"}]},{"c":"PB-OBR-DUL-010","n":"CULIS DE MANGO Y MARACUYÁ","i":[{"n":"Puré de mango","q":5000.0,"u":"gr"},{"n":"Puré de maracuyá","q":2000.0,"u":"gr"},{"n":"Azúcar blanco","q":6000.0,"u":"gr"},{"n":"Agua","q":1000.0,"u":"gr"},{"n":"Pectina","q":50.0,"u":"gr"},{"n":"Ácido cítrico","q":100.0,"u":"gr"},{"n":"Mango en cubos pequeños","q":10000.0,"u":"gr"}]},{"c":"PB-OBR-DUL-011","n":"CREMA DE QUESO FRENCH","i":[{"n":"Queso crema","q":2000.0,"u":"gr"},{"n":"Mascarpone","q":2000.0,"u":"gr"},{"n":"Crema de queso camembert (PB-OBR-SAL-016)","q":650.0,"u":"gr"},{"n":"Azúcar","q":670.0,"u":"gr"},{"n":"Sal fina","q":8.0,"u":"gr"}]},{"c":"PB-OBR-DUL-012","n":"MANTEQUILLA DE ALMENDRAS","i":[{"n":"Almendras","q":5000.0,"u":"gr"},{"n":"Aceite de girasol","q":1500.0,"u":"ml"}]},{"c":"PB-OBR-DUL-013","n":"CRUMBLE DE AVENA","i":[{"n":"Mantequilla francesa","q":3450.0,"u":"gr"},{"n":"Azúcar moreno","q":3000.0,"u":"gr"},{"n":"Harina","q":4050.0,"u":"gr"},{"n":"Harina de avena","q":1050.0,"u":"gr"},{"n":"Polvo de hornear","q":90.0,"u":"gr"},{"n":"Sal","q":45.0,"u":"gr"}]},{"c":"PB-OBR-DUL-014","n":"GRANOLA CASERA","i":[{"n":"Avena sin gluten","q":7000.0,"u":"gr"},{"n":"Copos de maíz sin gluten","q":1000.0,"u":"gr"},{"n":"Harina de arroz","q":2500.0,"u":"gr"},{"n":"Azúcar","q":1920.0,"u":"gr"},{"n":"Sésamo blanco","q":2000.0,"u":"gr"},{"n":"Nuez","q":1600.0,"u":"gr"},{"n":"Almendras","q":1600.0,"u":"gr"},{"n":"Pistachos","q":900.0,"u":"gr"},{"n":"Avellanas","q":900.0,"u":"gr"},{"n":"Aceite de girasol","q":2800.0,"u":"gr"},{"n":"Sal Maldon","q":160.0,"u":"gr"},{"n":"Miel","q":4800.0,"u":"gr"}]},{"c":"PB-OBR-DUL-015","n":"SIROPE DE BANANA Y MISO","i":[{"n":"Puré de banana","q":10000.0,"u":"gr"},{"n":"Azúcar","q":8000.0,"u":"gr"},{"n":"Miso blanco","q":2500.0,"u":"gr"},{"n":"Agua","q":1000.0,"u":"gr"},{"n":"Puré de banana","q":6000.0,"u":"gr"},{"n":"Azúcar","q":4800.0,"u":"gr"},{"n":"Miso blanco","q":1500.0,"u":"gr"},{"n":"Agua","q":600.0,"u":"gr"}]},{"c":"PB-OBR-DUL-016","n":"LIMONADA DE SANDÍA","i":[{"n":"Sandía","q":2.0,"u":"unidades enteras"},{"n":"Zumo de limón","q":1.0,"u":"litro"},{"n":"Ácido cítrico","q":30.0,"u":"gr"},{"n":"Rendimiento","q":null,"u":""}]},{"c":"PB-OBR-DUL-017","n":"SIROPE DE MARACUYÁ","i":[{"n":"Puré de maracuyá","q":6000.0,"u":"gr"},{"n":"Azúcar","q":4800.0,"u":"gr"},{"n":"Agua","q":1200.0,"u":"gr"},{"n":"Ácido cítrico","q":120.0,"u":"gr"}]},{"c":"PB-OBR-DUL-018","n":"SIROPE DE FRESA","i":[{"n":"Fresa congelada","q":10.0,"u":"kg"},{"n":"Azúcar","q":2500.0,"u":"gr"},{"n":"Ácido cítrico","q":120.0,"u":"gr"},{"n":"Rendimiento aprox.","q":null,"u":""},{"n":"Envase","q":null,"u":""}]},{"c":"PB-OBR-DUL-019","n":"SIROPE DE LIMÓN Y JENGIBRE","i":[{"n":"Jengibre fresco","q":1000.0,"u":"gr"},{"n":"Limones","q":1.0,"u":"caja"},{"n":"Miel","q":1000.0,"u":"gr"}]},{"c":"PB-OBR-DUL-020","n":"COLD FOAM DULCE DE LECHE","i":[{"n":"Nata","q":400.0,"u":"gr"},{"n":"Leche","q":250.0,"u":"gr"},{"n":"Dulce de leche familiar","q":400.0,"u":"gr"},{"n":"Sal","q":9.0,"u":"gr"},{"n":"Xantana","q":1.5,"u":"gr"}]},{"c":"PB-OBR-DUL-021","n":"COLD FOAM VAINILLA","i":[{"n":"Nata","q":500.0,"u":"gr"},{"n":"Leche","q":300.0,"u":"gr"},{"n":"Azúcar glass","q":90.0,"u":"gr"},{"n":"Vainilla","q":30.0,"u":"gr"},{"n":"Sal","q":9.0,"u":"gr"},{"n":"Xantana","q":2.0,"u":"gr"}]},{"c":"PB-OBR-DUL-022","n":"ZUMO VERDE","i":[{"n":"Espinaca fresca","q":1000.0,"u":"gr"},{"n":"Melón piel de sapo","q":4.0,"u":"ud."},{"n":"Manzana Granny Smith","q":18.0,"u":"ud."},{"n":"Ácido cítrico","q":60.0,"u":"gr"}]},{"c":"PB-OBR-DUL-023","n":"COLD BREW","i":[{"n":"Café en grano","q":1000.0,"u":"gr"},{"n":"Agua fría","q":10.0,"u":"litros"}]},{"c":"PB-OBR-DUL-024","n":"MEDIALUNA","i":[{"n":"Azúcar","q":400.0,"u":"gr"},{"n":"Sal","q":90.0,"u":"gr"},{"n":"Miel","q":180.0,"u":"gr"},{"n":"Esencia de vainilla","q":150.0,"u":"gr"},{"n":"Levadura en polvo","q":80.0,"u":"gr"},{"n":"Leche fría","q":3000.0,"u":"gr"},{"n":"Harina Nova","q":4600.0,"u":"gr"},{"n":"Harina integral","q":400.0,"u":"gr"},{"n":"Masa madre trigo","q":100.0,"u":"gr"},{"n":"EMPASTE","q":null,"u":""},{"n":"Mantequilla laminar 84%","q":2000.0,"u":"gr"},{"n":"RENDIMIENTO","q":80.0,"u":"medialunas"}]},{"c":"PB-OBR-DUL-025","n":"CROISSANT","i":[{"n":"LEAVEN PASTOSO — preparar día anterior","q":null,"u":""},{"n":"Masa madre","q":60.0,"u":"gr"},{"n":"Agua (26°C)","q":80.0,"u":"gr"},{"n":"Harina floja","q":140.0,"u":"gr"},{"n":"MASA","q":null,"u":""},{"n":"Harina T45 Nova","q":3600.0,"u":"gr"},{"n":"Sal","q":72.0,"u":"gr"},{"n":"Azúcar","q":500.0,"u":"gr"},{"n":"Miel","q":180.0,"u":"gr"},{"n":"Yemas","q":180.0,"u":"gr"},{"n":"Leaven pastoso","q":200.0,"u":"gr"},{"n":"Mantequilla","q":450.0,"u":"gr"},{"n":"Leche entera","q":750.0,"u":"gr"},{"n":"Agua 50% hielo 50%","q":750.0,"u":"gr"},{"n":"Levadura fresca","q":180.0,"u":"gr"},{"n":"EMPASTE","q":null,"u":""},{"n":"Mantequilla para laminar 84%","q":2000.0,"u":"gr"},{"n":"RINDE","q":70.0,"u":"croissants"}]},{"c":"PB-OBR-DUL-026","n":"BUN AND ROLL","i":[]},{"c":"PB-OBR-DUL-027","n":"SUIZO","i":[]},{"c":"PB-OBR-DUL-028","n":"CANASTA","i":[]},{"c":"PB-OBR-DUL-029","n":"BONET","i":[]},{"c":"PB-OBR-DUL-030","n":"PALMERA DE HOJALDRE INVERTIDO","i":[{"n":"MANTEQUILLA PARA HOJALDRE INVERTIDO — preparar día anterior","q":null,"u":""},{"n":"Mantequilla 84% MG","q":1200.0,"u":"gr"},{"n":"Harina sfoglia","q":450.0,"u":"gr"},{"n":"Pastón mantequilla","q":1625.0,"u":"gr c/u · cuadrar 40×30 cm"},{"n":"MASA PARA HOJALDRE INVERTIDO — preparar día anterior","q":null,"u":""},{"n":"Harina sfoglia","q":1050.0,"u":"gr"},{"n":"Mantequilla 84% MG","q":300.0,"u":"gr"},{"n":"Agua fría","q":450.0,"u":"gr"},{"n":"Sal","q":40.0,"u":"gr"},{"n":"Vinagre","q":8.0,"u":"gr"},{"n":"Pastón masa","q":1850.0,"u":"gr c/u · cuadrar 30×20 cm"},{"n":"ESPOLVOREO","q":null,"u":""},{"n":"Azúcar","q":null,"u":""}]},{"c":"PB-OBR-DUL-031","n":"PERRET","i":[]},{"c":"PB-OBR-DUL-032","n":"ROL DE CANELA","i":[{"n":"MASA","q":null,"u":""},{"n":"Harina sfoglia HR5","q":2860.0,"u":"gr"},{"n":"Sal","q":24.0,"u":"gr"},{"n":"Mantequilla para laminar 84%","q":400.0,"u":"gr"},{"n":"Leche entera","q":800.0,"u":"gr"},{"n":"Azúcar blanca","q":500.0,"u":"gr"},{"n":"Huevos","q":4.0,"u":"ud."},{"n":"Levadura fresca","q":200.0,"u":"gr"},{"n":"Nata","q":400.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Mantequilla pomada","q":500.0,"u":"gr"},{"n":"Azúcar blanca","q":200.0,"u":"gr"},{"n":"Canela","q":25.0,"u":"gr"}]},{"c":"PB-OBR-DUL-033","n":"CREMAS — PASTELERA Y DERIVADAS","i":[{"n":"Leche","q":600.0,"u":"gr"},{"n":"Azúcar 1","q":35.0,"u":"gr"},{"n":"Azúcar 2","q":35.0,"u":"gr"},{"n":"Yemas (pasteurizadas)","q":180.0,"u":"gr"},{"n":"Maizena","q":40.0,"u":"gr"},{"n":"Vainilla","q":20.0,"u":"gr"},{"n":"Mantequilla","q":160.0,"u":"gr"}]},{"c":"PB-OBR-DUL-034","n":"FRANGIPAN Y VARIANTES","i":[{"n":"Harina de almendra","q":100.0,"u":"gr"},{"n":"Azúcar","q":100.0,"u":"gr"},{"n":"Mantequilla (pomada)","q":100.0,"u":"gr"},{"n":"Huevos","q":2.0,"u":"ud."},{"n":"Harina","q":20.0,"u":"gr"},{"n":"Ralladura de limón","q":null,"u":""}]},{"c":"PB-OBR-DUL-035","n":"CREMA DE CHOCOLATE Y BAILEYS","i":[{"n":"Chocolate con leche","q":375.0,"u":"gr"},{"n":"Nata","q":175.0,"u":"gr"},{"n":"Leche entera","q":125.0,"u":"gr"},{"n":"Azúcar","q":50.0,"u":"gr"},{"n":"Glucosa","q":60.0,"u":"gr"},{"n":"Sal fina","q":1.5,"u":"gr"},{"n":"Mantequilla","q":40.0,"u":"gr"},{"n":"Aceite","q":25.0,"u":"gr"},{"n":"Ácido cítrico","q":0.5,"u":"gr"},{"n":"Baileys","q":100.0,"u":"gr"},{"n":"Café espresso","q":12.0,"u":"gr (~2 cápsulas)"}]},{"c":"PB-OBR-DUL-036","n":"CREMA DE CAFÉ Y MASCARPONE","i":[{"n":"Café en grano","q":250.0,"u":"gr"},{"n":"Nata 1","q":1875.0,"u":"gr"},{"n":"Gelatina","q":15.0,"u":"gr"},{"n":"Mascarpone","q":500.0,"u":"gr"},{"n":"Chocolate blanco","q":775.0,"u":"gr"},{"n":"Nata 2","q":1750.0,"u":"gr"}]},{"c":"PB-OBR-DUL-037","n":"RELLENO DE PISTACHO","i":[{"n":"Chocolate blanco","q":700.0,"u":"gr"},{"n":"Nata","q":700.0,"u":"gr"},{"n":"Mantequilla de pistacho","q":400.0,"u":"gr"},{"n":"Glucosa","q":200.0,"u":"gr"},{"n":"Mantequilla","q":60.0,"u":"gr"},{"n":"Aceite","q":40.0,"u":"gr"},{"n":"Sal","q":2.0,"u":"gr"}]},{"c":"PB-OBR-DUL-038","n":"PASTA DE PISTACHO","i":[{"n":"Pistachos","q":10000.0,"u":"gr"},{"n":"Aceite de girasol","q":3000.0,"u":"ml"}]},{"c":"PB-OBR-DUL-039","n":"CRÉMEUX DE CHOCOLATE 70%","i":[{"n":"Nata espesa 35%","q":375.0,"u":"gr"},{"n":"Leche","q":375.0,"u":"gr"},{"n":"Yemas","q":150.0,"u":"gr"},{"n":"Azúcar","q":75.0,"u":"gr"},{"n":"Chocolate 70% República del Cacao","q":375.0,"u":"gr"}]},{"c":"PB-OBR-DUL-040","n":"CAFÉ TOFFEE","i":[{"n":"Azúcar","q":80.0,"u":"gr"},{"n":"Glucosa 1 (para el caramelo)","q":80.0,"u":"gr"},{"n":"Nata espesa 35%","q":160.0,"u":"gr"},{"n":"Leche","q":40.0,"u":"gr"},{"n":"Glucosa 2 (para los lácteos)","q":40.0,"u":"gr"},{"n":"Sal","q":1.0,"u":"gr"},{"n":"Mantequilla","q":55.0,"u":"gr"},{"n":"Café en grano","q":25.0,"u":"gr"}]},{"c":"PB-OBR-DUL-041","n":"FROSTING DE QUESO CREMA","i":[{"n":"Mantequilla pomada","q":1000.0,"u":"gr"},{"n":"Azúcar glass","q":1000.0,"u":"gr"},{"n":"Queso crema (frío de nevera)","q":2000.0,"u":"gr"}]},{"c":"PB-OBR-DUL-042","n":"RELLENO PERRET","i":[{"n":"Chocolate con leche","q":300.0,"u":"gr"},{"n":"Chocolate negro","q":300.0,"u":"gr"},{"n":"Praliné","q":600.0,"u":"gr"},{"n":"Pailleté feuilletine","q":600.0,"u":"gr"}]},{"c":"PB-OBR-DUL-043","n":"COOKIES DE TAPA — MASA BASE","i":[{"n":"Harina floja","q":1500.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1020.0,"u":"gr"},{"n":"Frutos secos y/o chocolate","q":450.0,"u":"gr"},{"n":"Azúcar","q":798.0,"u":"gr"},{"n":"Huevos (T° ambiente 17-20°C)","q":6.0,"u":"ud."},{"n":"Chocolate","q":700.0,"u":"gr"},{"n":"Pasta de vainilla","q":24.0,"u":"gr"}]},{"c":"PB-OBR-DUL-044","n":"TOFFEE","i":[{"n":"Azúcar moreno","q":400.0,"u":"gr"},{"n":"Mantequilla","q":226.0,"u":"gr"},{"n":"Sal","q":20.0,"u":"gr"}]},{"c":"PB-OBR-DUL-045","n":"COOKIES XL — CHOCO CHIP","i":[{"n":"Harina floja","q":920.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente 17-20°C)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente 17-20°C)","q":12.0,"u":"ud."},{"n":"Chocolate con leche (trozos)","q":900.0,"u":"gr"},{"n":"Chocolate negro (trozos)","q":900.0,"u":"gr"}]},{"c":"PB-OBR-DUL-046","n":"COOKIES XL RELLENAS — KINDER","i":[{"n":"MASA","q":null,"u":""},{"n":"Harina floja","q":920.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente)","q":12.0,"u":"ud."},{"n":"Chocolate con leche (trozos)","q":900.0,"u":"gr"},{"n":"Chocolate blanco (trozos)","q":900.0,"u":"gr"},{"n":"Nocilla blanca","q":1840.0,"u":"gr"},{"n":"Avellanas","q":660.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Nocilla blanca (previamente enfriada)","q":30.0,"u":"gr/ud."}]},{"c":"PB-OBR-DUL-047","n":"COOKIES XL RELLENAS — NUTELLA","i":[{"n":"MASA","q":null,"u":""},{"n":"Harina floja","q":920.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente)","q":12.0,"u":"ud."},{"n":"Chocolate con leche (trozos)","q":900.0,"u":"gr"},{"n":"Chocolate blanco (trozos)","q":900.0,"u":"gr"},{"n":"Nutella","q":1840.0,"u":"gr"},{"n":"Avellanas","q":660.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Nutella (previamente congelada)","q":30.0,"u":"gr/ud."}]},{"c":"PB-OBR-DUL-041","n":"COOKIES XL RELLENAS — OREO","i":[{"n":"MASA","q":null,"u":""},{"n":"Harina floja","q":740.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Cacao","q":180.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente)","q":12.0,"u":"ud."},{"n":"Oreo (troceadas)","q":660.0,"u":"gr"},{"n":"Chocolate blanco (trozos)","q":1800.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Frosting queso crema — ver PB-OBR-DUL-041","q":30.0,"u":"gr/ud."}]},{"c":"PB-OBR-DUL-049","n":"COOKIES XL RELLENAS — PATAGÓNICAS","i":[{"n":"MASA","q":null,"u":""},{"n":"Harina floja","q":920.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente)","q":12.0,"u":"ud."},{"n":"Chocolate con leche (trozos)","q":900.0,"u":"gr"},{"n":"Chocolate blanco (trozos)","q":900.0,"u":"gr"},{"n":"Frutos secos","q":660.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Dulce de leche repostero (congelado)","q":30.0,"u":"gr/ud."}]},{"c":"PB-OBR-DUL-050","n":"TAPAS DE ALFAJORES","i":[{"n":"Mantequilla FRÍA","q":520.0,"u":"gr"},{"n":"Azúcar impalpable","q":240.0,"u":"gr"},{"n":"Harina de almendras","q":240.0,"u":"gr"},{"n":"Huevos","q":80.0,"u":"gr"},{"n":"Harina floja","q":520.0,"u":"gr"},{"n":"Cacao / matcha / harina floja (*)","q":16.0,"u":"gr"},{"n":"Sal","q":6.0,"u":"gr"}]},{"c":"PB-OBR-DUL-044","n":"COOKIES XL — TOFFEE","i":[{"n":"Harina floja","q":920.0,"u":"gr"},{"n":"Harina de fuerza","q":1100.0,"u":"gr"},{"n":"Sal","q":50.0,"u":"gr"},{"n":"Maizena","q":32.0,"u":"gr"},{"n":"Bicarbonato de sodio","q":24.0,"u":"gr"},{"n":"Mantequilla pomada (17-20°C)","q":1120.0,"u":"gr"},{"n":"Azúcar moreno","q":1140.0,"u":"gr"},{"n":"Azúcar blanca","q":460.0,"u":"gr"},{"n":"Huevos (T° ambiente)","q":8.0,"u":"ud."},{"n":"Yemas (T° ambiente)","q":12.0,"u":"ud."},{"n":"Chocolate con leche (trozos)","q":900.0,"u":"gr"},{"n":"Toffee en trozos — ver PB-OBR-DUL-044 ×6","q":900.0,"u":"gr"},{"n":"Nuez","q":900.0,"u":"gr"}]},{"c":"PB-OBR-DUL-052","n":"COQUITOS","i":[{"n":"Coco rallado","q":6.0,"u":"kg"},{"n":"Azúcar blanca","q":6.0,"u":"kg"},{"n":"Claras de huevo","q":2.0,"u":"kg"},{"n":"Compota de manzana","q":800.0,"u":"gr"}]},{"c":"PB-OBR-DUL-053","n":"TARTA DE LIMA (KEY LIME PIE)","i":[{"n":"×1","q":null,"u":""},{"n":"×3,84","q":null,"u":""},{"n":"BASE","q":null,"u":""},{"n":"Crumble de avena (PB-OBR-DUL-007)","q":345.0,"u":"gr"},{"n":"Frutos secos (procesados)","q":86.0,"u":"gr"},{"n":"RELLENO","q":null,"u":""},{"n":"Leche condensada entera","q":793.0,"u":"gr"},{"n":"Zumo de lima","q":240.0,"u":"gr"},{"n":"Yemas de huevo","q":4.0,"u":"ud. (~74 gr)"},{"n":"Ralladura de lima","q":2.0,"u":"gr"}]},{"c":"PB-OBR-DUL-054","n":"TARTA DE QUESO (CHEESECAKE)","i":[{"n":"Redondo","q":24.0,"u":"cm diámetro"},{"n":"Rectangular","q":35.0,"u":"×45 cm"},{"n":"RELLENO DE QUESO","q":null,"u":""},{"n":"Queso crema","q":820.0,"u":"gr"},{"n":"Nata","q":550.0,"u":"gr"},{"n":"Yemas de huevo","q":6.0,"u":"ud."},{"n":"Huevos enteros","q":4.0,"u":"ud."},{"n":"Chocolate blanco *","q":400.0,"u":"gr"},{"n":"Sal","q":10.0,"u":"gr"},{"n":"Azúcar","q":150.0,"u":"gr"},{"n":"Maizena","q":20.0,"u":"gr"},{"n":"Queso azul","q":4.0,"u":"gr"},{"n":"BASE","q":null,"u":""},{"n":"Crumble de avena (PB-OBR-DUL-007)","q":345.0,"u":"gr"},{"n":"Frutos secos (procesados)","q":86.0,"u":"gr"}]},{"c":"PB-OBR-DUL-055","n":"COULIS DE FRUTOS ROJOS","i":[{"n":"Azúcar","q":4.0,"u":"kg"},{"n":"Agua","q":800.0,"u":"gr"},{"n":"Frutos rojos congelados (mix)","q":5.0,"u":"kg"},{"n":"Ácido cítrico","q":100.0,"u":"gr"},{"n":"Frambuesa congelada","q":5.0,"u":"kg"},{"n":"Arándanos congelados","q":5.0,"u":"kg"}]},{"c":"PB-OBR-DUL-056","n":"CARAMELO PARA BEBIDAS","i":[{"n":"Azúcar","q":7200.0,"u":"gr"},{"n":"Nata (caliente, sin infusionar)","q":6000.0,"u":"gr"},{"n":"Mantequilla","q":2214.0,"u":"gr"},{"n":"Sal","q":90.0,"u":"gr"}]},{"c":"PB-OBR-DUL-057","n":"CARAMELO AMARGO PARA BEBIDAS","i":[{"n":"Azúcar","q":5.0,"u":"kg"},{"n":"Agua caliente","q":2.0,"u":"litros"},{"n":"Pasta de vainilla","q":100.0,"u":"gr"}]},{"c":"PB-OBR-DUL-058","n":"BUDÍN DE LIMÓN","i":[{"n":"×5","q":9.0,"u":"moldes"},{"n":"Limones (zest y gajos)","q":25.0,"u":"ud"},{"n":"Huevos","q":2500.0,"u":"gr"},{"n":"Azúcar","q":2750.0,"u":"gr"},{"n":"Nata (crema)","q":1250.0,"u":"gr"},{"n":"Harina","q":2750.0,"u":"gr"},{"n":"Polvo de hornear","q":50.0,"u":"gr"},{"n":"Mantequilla derretida","q":1250.0,"u":"gr"},{"n":"Limones confitados (procesados)","q":500.0,"u":"gr"}]},{"c":"PB-OBR-DUL-059","n":"LIMONES CONFITADOS","i":[{"n":"LIMONES CONFITADOS","q":null,"u":""},{"n":"Limones (cáscaras)","q":1000.0,"u":"gr"},{"n":"Azúcar (almíbar de cocción)","q":1000.0,"u":"gr"},{"n":"Agua (almíbar de cocción)","q":1000.0,"u":"gr"},{"n":"ALMÍBAR DE LIMÓN (sub-receta)","q":null,"u":""},{"n":"Zumo de limón","q":1.0,"u":"parte"},{"n":"Agua","q":1.0,"u":"parte"},{"n":"Azúcar blanca","q":2.0,"u":"partes"}]},{"c":"PB-OBR-DUL-060","n":"CURD DE LIMÓN INTENSO","i":[{"n":"Zumo de limón (reducido)","q":2000.0,"u":"gr → 1.660 gr"},{"n":"Ralladura fina de limón","q":45.0,"u":"-50 limones"},{"n":"Azúcar","q":2030.0,"u":"gr"},{"n":"Huevos enteros","q":920.0,"u":"gr"},{"n":"Yemas","q":1110.0,"u":"gr"},{"n":"Sal","q":18.0,"u":"gr"},{"n":"Mantequilla fría","q":1660.0,"u":"gr"},{"n":"Pectina NH","q":42.0,"u":"gr"},{"n":"Ácido cítrico (opcional)","q":6.0,"u":"-8 gr"}]},{"c":"PB-OBR-DUL-061","n":"GÂTEAU AU CHOCOLAT","i":[{"n":"Harina","q":375.0,"u":"gr"},{"n":"Cacao en polvo","q":75.0,"u":"gr"},{"n":"Bicarbonato sódico","q":12.0,"u":"gr"},{"n":"Sal","q":7.0,"u":"gr"},{"n":"Polvo de hornear","q":6.0,"u":"gr"},{"n":"Azúcar","q":400.0,"u":"gr"},{"n":"Huevos","q":2.0,"u":"uds"},{"n":"Aceite","q":180.0,"u":"gr"},{"n":"Leche","q":247.0,"u":"gr"},{"n":"Agua hirviendo","q":250.0,"u":"gr"}]},{"c":"PB-OBR-DUL-062","n":"TOFFEE","i":[{"n":"Azúcar","q":320.0,"u":"gr"},{"n":"Glucosa (1)","q":160.0,"u":"gr"},{"n":"Nata espesa 35%","q":640.0,"u":"gr"},{"n":"Leche","q":160.0,"u":"gr"},{"n":"Glucosa (2)","q":320.0,"u":"gr"},{"n":"Sal","q":4.0,"u":"gr"},{"n":"Mantequilla","q":220.0,"u":"gr"},{"n":"TOTAL","q":1824.0,"u":"gr"}]},{"c":"PB-OBR-DUL-063","n":"CRUJIENTE DE COCO","i":[{"n":"Chocolate blanco","q":1000.0,"u":"gr"},{"n":"Coco rallado (tostado)","q":400.0,"u":"gr"},{"n":"Mantequilla de almendra","q":400.0,"u":"gr"},{"n":"Feuilletine","q":200.0,"u":"gr"},{"n":"TOTAL","q":2000.0,"u":"gr"}]},{"c":"PB-OBR-DUL-064","n":"FINANCIER DE VAINILLA","i":[{"n":"Clara de huevo","q":729.0,"u":"gr"},{"n":"Mantequilla clarificada","q":648.0,"u":"gr"},{"n":"Harina de almendra","q":387.0,"u":"gr"},{"n":"Azúcar moreno","q":890.0,"u":"gr"},{"n":"Harina","q":324.0,"u":"gr"},{"n":"Sal","q":25.0,"u":"gr"},{"n":"Vainas de vainilla","q":3.0,"u":"uds"},{"n":"Ralladura de naranja","q":2.0,"u":"uds"},{"n":"TOTAL","q":3003.0,"u":"gr"}]},{"c":"PB-OBR-DUL-065","n":"BROWNIE","i":[{"n":"Chocolate negro 70%","q":600.0,"u":"gr"},{"n":"Chocolate con leche 30%","q":400.0,"u":"gr"},{"n":"Mantequilla","q":750.0,"u":"gr"},{"n":"Huevos talla M","q":15.0,"u":"uds (825 gr)"},{"n":"Azúcar","q":1100.0,"u":"gr"},{"n":"Harina de repostería","q":450.0,"u":"gr"},{"n":"Cacao en polvo 100%","q":100.0,"u":"gr"},{"n":"Esencia de vainilla","q":2.0,"u":"cda"},{"n":"Sal","q":8.0,"u":"gr"}]},{"c":"PB-OBR-DUL-066","n":"CARROT CAKE","i":[{"n":"Harina floja","q":500.0,"u":"gr"},{"n":"Bicarbonato sódico","q":12.0,"u":"gr"},{"n":"Polvo de hornear","q":14.0,"u":"gr"},{"n":"Canela","q":16.0,"u":"gr"},{"n":"Zanahoria rallada","q":1000.0,"u":"gr"},{"n":"Azúcar","q":800.0,"u":"gr"},{"n":"Aceite","q":360.0,"u":"gr"},{"n":"Huevos","q":8.0,"u":"uds"},{"n":"TOTAL","q":2702.0,"u":"gr"}]},{"c":"PB-OBR-SAL-001","n":"SALSA HOLANDESA","i":[{"n":"V1 (estándar)\nV2 (grande)","q":null,"u":""},{"n":"1","q":null,"u":""},{"n":"2","q":null,"u":""},{"n":"3","q":null,"u":""},{"n":"4","q":null,"u":""},{"n":"5","q":null,"u":""},{"n":"6","q":null,"u":""}]},{"c":"PB-OBR-SAL-002","n":"CHIMICHURRI","i":[{"n":"Ajo granulado","q":1250.0,"u":"gr"},{"n":"Hierbas provenzales","q":100.0,"u":"gr"},{"n":"Orégano","q":100.0,"u":"gr"},{"n":"Perejil","q":50.0,"u":"gr"},{"n":"Ají molido / Piri piri","q":300.0,"u":"gr"},{"n":"Pimentón dulce","q":60.0,"u":"gr"},{"n":"Pimienta molida","q":50.0,"u":"gr"},{"n":"Sal","q":225.0,"u":"gr"},{"n":"Vinagre de vino blanco","q":1800.0,"u":"gr"},{"n":"Aceite de oliva","q":2000.0,"u":"ml"},{"n":"Aceite de maíz","q":1150.0,"u":"ml"},{"n":"Agua caliente","q":5000.0,"u":"ml"}]},{"c":"PB-OBR-SAL-003","n":"MAYONESA DE CHIMICHURRI","i":[{"n":"Mayonesa","q":3200.0,"u":"gr"},{"n":"Chimichurri (PB-OBR-SAL-002)","q":400.0,"u":"gr"}]},{"c":"PB-OBR-SAL-004","n":"ROMESCO DE CIRUELA","i":[{"n":"1","q":null,"u":""},{"n":"2","q":null,"u":""},{"n":"3","q":null,"u":""},{"n":"4","q":null,"u":""},{"n":"5","q":null,"u":""},{"n":"6","q":null,"u":""},{"n":"7","q":null,"u":""}]},{"c":"PB-OBR-SAL-005","n":"AJO BLANCO","i":[{"n":"Almendra marcona pelada","q":500.0,"u":"gr"},{"n":"Miga de pan del día anterior (sin corteza)","q":200.0,"u":"gr"},{"n":"Ajo","q":40.0,"u":"gr"},{"n":"Aceite de oliva virgen extra suave","q":240.0,"u":"gr"},{"n":"Vinagre de Jerez","q":120.0,"u":"gr"},{"n":"Agua muy fría","q":1400.0,"u":"gr"},{"n":"Sal","q":20.0,"u":"gr"}]},{"c":"PB-OBR-SAL-006","n":"SALSA DE TOMILLO","i":[{"n":"Tomillo deshojado","q":100.0,"u":"gr (5 barquetas)"},{"n":"Ralladura de limón","q":5.0,"u":"limones"},{"n":"Aceite de oliva suave","q":250.0,"u":"gr"},{"n":"Zumo de limón","q":2.5,"u":"limones (~75 gr)"},{"n":"Yogurt griego","q":1000.0,"u":"gr"},{"n":"Mayonesa","q":1500.0,"u":"gr"},{"n":"Rendimiento","q":null,"u":""}]},{"c":"PB-OBR-SAL-007","n":"MAYONESA DE SANDO","i":[{"n":"Mayonesa","q":3300.0,"u":"gr"},{"n":"Chilli paste with sweet basil leaves","q":400.0,"u":"gr"}]},{"c":"PB-OBR-SAL-008","n":"DIJONESA","i":[{"n":"Mayonesa","q":3300.0,"u":"gr"},{"n":"Mostaza Dijon Original (Unilever)","q":1000.0,"u":"gr"}]},{"c":"PB-OBR-SAL-009","n":"ACEITE DE CHILLI","i":[{"n":"Aceite de girasol","q":800.0,"u":"gr"},{"n":"Crispy Chilli in Oil","q":105.0,"u":"gr"},{"n":"Salsa Pomodoro deshidratada Knorr","q":150.0,"u":"gr"}]},{"c":"PB-OBR-SAL-010","n":"MERMELADA DE PIMIENTO","i":[{"n":"1","q":null,"u":""},{"n":"2","q":null,"u":""}]},{"c":"PB-OBR-SAL-011","n":"MERMELADA DE CHORIZO","i":[{"n":"Chorizo","q":9000.0,"u":"gr"},{"n":"Azúcar moreno","q":1500.0,"u":"gr"},{"n":"Jarabe de arce","q":750.0,"u":"gr"},{"n":"Tomillo fresco","q":80.0,"u":"gr"}]},{"c":"PB-OBR-SAL-012","n":"PEPINILLO ENCURTIDO","i":[{"n":"Pepino holandés","q":4500.0,"u":"gr"},{"n":"Azúcar","q":750.0,"u":"gr"},{"n":"Agua","q":750.0,"u":"gr"},{"n":"Vinagre de sushi","q":5.0,"u":"litros"},{"n":"Semillas de mostaza","q":15.0,"u":"gr"}]},{"c":"PB-OBR-SAL-013","n":"BERENJENA EN ESCABECHE","i":[{"n":"Berenjena","q":20.0,"u":"ud."},{"n":"Agua","q":20.0,"u":"litros"},{"n":"Vinagre","q":1.0,"u":"litro"},{"n":"Laurel","q":10.0,"u":"hojas"},{"n":"Sal marina","q":200.0,"u":"gr"},{"n":"Chimichurri (PB-OBR-SAL-002)","q":400.0,"u":"gr"},{"n":"Aceite de girasol","q":1000.0,"u":"ml"},{"n":"Aceite de oliva","q":1000.0,"u":"ml"}]},{"c":"PB-OBR-SAL-014","n":"CHUCRUT","i":[{"n":"Repollo","q":4.0,"u":"ud."},{"n":"Manzana Granny Smith","q":12.0,"u":"ud."},{"n":"Sal","q":2.0,"u":""},{"n":"Ácido cítrico","q":1.0,"u":""}]},{"c":"PB-OBR-SAL-015","n":"TOMATES CHERRY CONFITADOS","i":[{"n":"Tomate cherry","q":30000.0,"u":"gr"},{"n":"Aceite de oliva","q":5000.0,"u":"ml"},{"n":"Tomillo","q":80.0,"u":"gr"},{"n":"Sal","q":60.0,"u":"gr"},{"n":"Pimienta","q":15.0,"u":"gr"}]},{"c":"PB-OBR-SAL-016","n":"CREMA DE QUESO (CAMEMBERT)","i":[{"n":"Queso camembert","q":4800.0,"u":"gr"},{"n":"Nata","q":3000.0,"u":"ml"}]},{"c":"PB-OBR-SAL-017","n":"PANCETA COCIDA A BAJA TEMPERATURA","i":[{"n":"Panceta de cerdo","q":null,"u":"gr"},{"n":"Salsa hoisin","q":840.0,"u":"gr"},{"n":"Salsa chilli albahaca dulce","q":210.0,"u":"gr"},{"n":"Agua","q":1000.0,"u":"ml"},{"n":"Miel","q":1000.0,"u":"gr"}]},{"c":"PB-OBR-SAL-018","n":"MANTEQUILLA DE TOMILLO","i":[{"n":"PARTE 1 — Para derretir con el tomillo","q":null,"u":"PARTE 1 — Para derretir con el tomillo"},{"n":"Mantequilla","q":2000.0,"u":"gr"},{"n":"Tomillo fresco","q":80.0,"u":"gr"},{"n":"PARTE 2 — Para batir en batidora","q":null,"u":"PARTE 2 — Para batir en batidora"},{"n":"Mantequilla en trozos","q":2000.0,"u":"gr"},{"n":"Jarabe de arce","q":400.0,"u":"gr"},{"n":"Sal Maldon","q":20.0,"u":"gr"}]},{"c":"PB-OBR-SAL-019","n":"FILADELFIA Y ENELDO","i":[{"n":"Queso crema","q":5000.0,"u":"gr"},{"n":"Eneldo fresco","q":1.0,"u":"barqueta"},{"n":"Aceite de girasol","q":100.0,"u":"gr"},{"n":"Ralladura de limón","q":3.0,"u":"limones"}]},{"c":"PB-OBR-SAL-020","n":"HUEVO POCHÉ","i":[{"n":"Huevos frescos","q":180.0,"u":"ud."}]},{"c":"PB-OBR-SAL-021","n":"AGUACATE PISADO","i":[{"n":"1","q":null,"u":""},{"n":"2","q":null,"u":""},{"n":"3","q":null,"u":""},{"n":"4","q":null,"u":""},{"n":"5","q":null,"u":""}]},{"c":"PB-OBR-SAL-022","n":"PATATA PARA TORTILLA","i":[{"n":"1","q":null,"u":""},{"n":"2","q":null,"u":""}]},{"c":"PB-OBR-SAL-023","n":"PORCHETTA PANGEA","i":[{"n":"×2","q":2.0,"u":"pancetas"},{"n":"×12","q":12.0,"u":"pancetas"},{"n":"Ajos","q":300.0,"u":"gr"},{"n":"Romero deshojado","q":86.0,"u":"gr"},{"n":"Pimiento granulado","q":18.0,"u":"gr"},{"n":"Especias provenzal","q":10.0,"u":"gr"},{"n":"Cebolla granulada","q":10.0,"u":"gr"},{"n":"Aceite de girasol","q":60.0,"u":"gr"},{"n":"Mostaza Dijon","q":200.0,"u":"gr"},{"n":"PROTEÍNA","q":null,"u":""},{"n":"Panceta (pieza entera con cuero)","q":2.0,"u":"ud."},{"n":"Solomillo","q":2096.0,"u":"gr (4 ud.)"}]},{"c":"PB-OBR-SAL-024","n":"PASTRAMI PANGEA","i":[{"n":"PROTEÍNA","q":null,"u":""},{"n":"Picaña","q":1600.0,"u":"gr"},{"n":"SALMUERA","q":null,"u":""},{"n":"Agua fría","q":1800.0,"u":"gr"},{"n":"Agua con hielo","q":1800.0,"u":"gr"},{"n":"Azúcar moreno","q":262.0,"u":"gr"},{"n":"Sal","q":150.0,"u":"gr"},{"n":"Sal de cura","q":24.0,"u":"gr"},{"n":"Pimienta negra","q":34.0,"u":"gr"},{"n":"Semillas de cilantro","q":28.0,"u":"gr"},{"n":"Semillas de mostaza amarilla","q":4.0,"u":"gr"},{"n":"Pimienta rosa","q":3.2,"u":"gr"},{"n":"Semillas de hinojo","q":1.8,"u":"gr"},{"n":"Canela en rama","q":1.3,"u":"gr"},{"n":"Copos de chile","q":3.4,"u":"gr"},{"n":"Clavo","q":0.28,"u":"gr"},{"n":"Laurel fresco","q":0.2,"u":"gr"},{"n":"Polvo de ajo","q":4.0,"u":"gr"},{"n":"Bayas de enebro","q":4.0,"u":"gr"},{"n":"BARK (mezcla de ahumado)","q":null,"u":""},{"n":"Pimienta negra gruesa","q":30.0,"u":"gr"},{"n":"Cilantro molido","q":20.0,"u":"gr"},{"n":"Pimentón ahumado","q":15.0,"u":"gr"},{"n":"Ajo en polvo","q":10.0,"u":"gr"},{"n":"Azúcar moreno","q":10.0,"u":"gr"},{"n":"Semillas de mostaza molidas","q":5.0,"u":"gr"}]},{"c":"PB-OBR-SAL-025","n":"SALMÓN CURADO CON NARANJA","i":[{"n":"Salmón entero (con cabeza, espinas y piel)","q":36.0,"u":"kg"},{"n":"Sal marina","q":10.0,"u":"kg"},{"n":"Azúcar blanca","q":5.0,"u":"kg"},{"n":"Ralladura de naranja","q":8.0,"u":"kg de naranja"}]},{"c":"PB-OBR-SAL-026","n":"CROQUETAS DE OBRADOR","i":[{"n":"Harina floja","q":600.0,"u":"gr"},{"n":"Mantequilla","q":600.0,"u":"gr"},{"n":"Nata","q":3.0,"u":"litros"},{"n":"Leche / caldo","q":2.0,"u":"litros"},{"n":"Embutido (robot coupe)","q":1500.0,"u":"gr"},{"n":"Gelatina en hojas","q":20.0,"u":"hojas"},{"n":"Panko (rebozado)","q":3000.0,"u":"gr"},{"n":"Huevo batido (rebozado)","q":20.0,"u":"ud."},{"n":"Harina floja","q":600.0,"u":"gr"},{"n":"Mantequilla","q":600.0,"u":"gr"},{"n":"Nata","q":3.0,"u":"litros"},{"n":"Leche / caldo","q":2.0,"u":"litros"},{"n":"Embutido","q":1500.0,"u":"gr"},{"n":"Gelatina en hojas","q":20.0,"u":"hojas"},{"n":"Panko (rebozado)","q":3000.0,"u":"gr"},{"n":"Huevo batido (rebozado)","q":20.0,"u":"ud."}]},{"c":"PB-OBR-SAL-027","n":"ENSALADA ENFRASCADA","i":[{"n":"Arroz cocido","q":null,"u":"gr"},{"n":"Edamame cocido","q":null,"u":"gr"},{"n":"Queso feta griego","q":null,"u":"gr"},{"n":"Semillas tostadas","q":null,"u":"gr"},{"n":"Pepino holandés","q":null,"u":"gr"}]}];
+const $=s=>document.querySelector(s);
+let sb=null, persona=null, tab='inv', materias=[], lotes=[], q='';
+const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2000);}
+function ymd(d){return d.toISOString().slice(0,10);}
+function hoy(){return ymd(new Date());}
+
+async function init(){
+  sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  renderLogin();
+}
+function renderLogin(){
+  const nombres=['Encargado','Obrador','Cocina'];
+  let h='<div class="login"><h2>¿Quién eres?</h2><p style="color:var(--gris);font-size:13px">Toca tu rol para entrar</p>';
+  nombres.forEach(n=>h+=`<button class="pbtn" data-n="${n}">${n}</button>`);
+  h+='<input id="otro" placeholder="…o escribe tu nombre" style="margin-top:8px"><button class="pbtn" id="otroBtn" style="margin-top:8px">Entrar</button></div>';
+  $('#app').innerHTML=h;
+  document.querySelectorAll('.pbtn[data-n]').forEach(b=>b.onclick=()=>entrar(b.dataset.n));
+  $('#otroBtn').onclick=()=>{const v=$('#otro').value.trim();if(v)entrar(v);};
+}
+async function entrar(n){
+  persona=n; $('#who').textContent='👤 '+n; $('#who').style.display='block';
+  $('#who').onclick=()=>{persona=null;$('#tabs').style.display='none';$('#who').style.display='none';renderLogin();};
+  $('#tabs').style.display='flex';
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{tab=t.dataset.t;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');render();});
+  await cargar(); render();
+}
+async function cargar(){
+  const {data:m}=await sb.from('inv_materias').select('*').order('nombre');
+  const {data:l}=await sb.from('inv_lotes').select('*').eq('agotado',false).order('caducidad');
+  materias=m||[]; lotes=l||[];
+}
+function stockDe(nombre){
+  return lotes.filter(l=>l.materia===nombre).reduce((a,l)=>a+Number(l.cantidad_actual),0);
+}
+// Conversión a unidad BASE: peso→gramos, volumen→ml, resto→tal cual
+function aBase(cant,unidad){
+  const u=(unidad||'').toLowerCase().trim();
+  if(u==='kg')return cant*1000;
+  if(u==='g'||u==='gr'||u==='gramos')return cant;
+  if(u==='l'||u==='litro'||u==='litros')return cant*1000;
+  if(u==='ml')return cant;
+  return cant; // ud, cajas, etc.
+}
+// familia de unidad para saber si son compatibles
+function familia(unidad){
+  const u=(unidad||'').toLowerCase().trim();
+  if(['kg','g','gr','gramos'].includes(u))return 'peso';
+  if(['l','litro','litros','ml'].includes(u))return 'vol';
+  return 'ud';
+}
+function lotesDe(nombre){return lotes.filter(l=>l.materia===nombre);}
+
+function render(){
+  if(tab==='inv')renderInv();
+  else if(tab==='rec')renderRecibir();
+  else if(tab==='prod')renderProducir();
+  else renderTraza();
+}
+
+// ---------- STOCK ----------
+function renderInv(){
+  let list=materias.slice();
+  const t=norm(q).trim();
+  if(t)list=list.filter(m=>norm(m.nombre).includes(t)||norm(m.proveedor).includes(t));
+  let h='<div class="wrap"><input id="search" placeholder="Buscar materia prima…" value="'+q+'">';
+  const conStock=list.filter(m=>stockDe(m.nombre)>0);
+  const sinStock=list.filter(m=>stockDe(m.nombre)<=0);
+  h+=`<h3 class="sec">Con stock · ${conStock.length}</h3>`;
+  if(conStock.length){h+='<div class="card">';conStock.forEach(m=>h+=invRow(m));h+='</div>';}
+  else h+='<div class="empty">Sin stock registrado todavía.<br>Ve a “Recibir” para dar entrada.</div>';
+  if(sinStock.length){h+=`<h3 class="sec">Sin stock · ${sinStock.length}</h3><div class="card">`;
+    sinStock.slice(0,60).forEach(m=>h+=invRow(m));h+='</div>';}
+  h+='<button class="btn s" id="vaciarBtn" style="margin-top:18px;color:var(--rojo);border-color:var(--rojo)">🗑️ Vaciar TODO el inventario</button>';
+  h+='</div>';
+  $('#app').innerHTML=h;
+  $('#search').oninput=e=>{q=e.target.value;const p=e.target.selectionStart;renderInv();$('#search').focus();$('#search').setSelectionRange(p,p);};
+  // borrar stock de una materia
+  document.querySelectorAll('[data-borrar]').forEach(b=>b.onclick=async()=>{
+    const nombre=b.dataset.borrar;
+    if(!confirm('¿Borrar todo el stock y lotes de "'+nombre+'"?\n(No borra la materia del catálogo, solo su stock)'))return;
+    const {error}=await sb.from('inv_lotes').delete().eq('materia',nombre);
+    if(error){toast('Error: '+error.message);return;}
+    await cargar();toast('Stock de '+nombre+' borrado');renderInv();
+  });
+  // vaciar todo
+  $('#vaciarBtn').onclick=async()=>{
+    if(!confirm('⚠️ Esto borrará TODO el stock, lotes, recepciones y producciones.\nEl catálogo de materias primas se conserva.\n\n¿Continuar?'))return;
+    if(!confirm('¿Seguro del todo? Esta acción NO se puede deshacer.'))return;
+    try{
+      await sb.from('inv_consumos').delete().neq('id',0);
+      await sb.from('inv_producciones').delete().neq('id',0);
+      await sb.from('inv_lotes').delete().neq('id',0);
+      await sb.from('inv_recepciones').delete().neq('id',0);
+      await cargar();toast('Inventario vaciado ✓');renderInv();
+    }catch(err){toast('Error al vaciar: '+(err.message||err));}
+  };
+}
+function invRow(m){
+  const s=stockDe(m.nombre); const ls=lotesDe(m.nombre);
+  const cls=s<=0?'zero':(s<=Number(m.stock_min)?'low':'');
+  let lotesTxt='';
+  if(ls.length){
+    lotesTxt=ls.map(l=>{
+      const cad=l.caducidad?new Date(l.caducidad):null;
+      const venc=cad&&cad<new Date();
+      return `${l.lote||'s/lote'}${l.caducidad?' · cad '+l.caducidad.slice(8)+'/'+l.caducidad.slice(5,7):''}${venc?' ⚠':''}`;
+    }).join('  ·  ');
+  }
+  return `<div class="row"><div class="nm">${m.nombre}<div class="prov">${m.proveedor||''}</div>
+    ${lotesTxt?'<div class="lotes">Lotes: '+lotesTxt+'</div>':''}</div>
+    <div class="stock ${cls}">${s>0?(Math.round(s*100)/100):'—'}<div class="prov" style="text-align:right">${m.unidad}</div></div>
+    ${s>0?`<button class="del" data-borrar="${m.nombre.replace(/"/g,'&quot;')}" title="Borrar stock de esta materia">🗑</button>`:''}</div>`;
+}
+
+// ---------- RECIBIR ----------
+let recFoto='', recLineas=[];
+function renderRecibir(){
+  let h='<div class="wrap"><h3 class="sec">Nueva recepción de mercadería</h3>';
+  h+='<label>Proveedor</label><select id="recProv"><option value="">— elegir —</option>';
+  [...new Set(materias.map(m=>m.proveedor).filter(Boolean))].sort().forEach(p=>h+=`<option>${p}</option>`);
+  h+='</select>';
+  h+='<label>Foto del albarán / factura</label>';
+  h+= recFoto?`<img class="foto" src="${recFoto}">`:'<div class="fotoph">Sin foto</div>';
+  h+='<button class="btn s" id="fotoBtn">📷 '+(recFoto?'Cambiar':'Hacer/subir')+' foto</button><input type="file" id="fotoIn" accept="image/*" capture="environment" style="display:none">';
+  h+= recFoto?'<button class="btn o" id="iaBtn">✨ Leer factura automáticamente</button>':'';
+  h+='<h3 class="sec" style="margin-top:16px">Productos recibidos</h3>';
+  h+='<div id="lineas"></div>';
+  h+='<button class="btn s" id="addLinea">＋ Añadir producto</button>';
+  h+='<button class="btn p" id="guardarRec">Guardar recepción y sumar al stock</button>';
+  h+='</div>';
+  $('#app').innerHTML=h;
+  pintarLineas();
+  $('#fotoBtn').onclick=()=>$('#fotoIn').click();
+  $('#fotoIn').onchange=recImagen;
+  if($('#iaBtn'))$('#iaBtn').onclick=leerFacturaIA;
+  $('#addLinea').onclick=()=>{recLineas.push({materia:'',lote:'',cad:'',cant:'',ud:'kg'});pintarLineas();};
+  $('#guardarRec').onclick=guardarRecepcion;
+  if($('#recProv'))$('#recProv').onchange=()=>{};
+}
+function pintarLineas(){
+  const cont=$('#lineas'); if(!cont)return;
+  if(!recLineas.length){cont.innerHTML='<div class="empty" style="padding:18px">Añade los productos del albarán.</div>';return;}
+  let h='';
+  recLineas.forEach((l,i)=>{
+    h+=`<div class="lote-item"><div class="top"><span>Producto ${i+1}</span><button class="del" data-del="${i}">🗑</button></div>
+      <input list="matlist" data-i="${i}" data-f="materia" placeholder="Materia prima" value="${l.materia}">
+      <div class="lgrid">
+        <input data-i="${i}" data-f="cant" type="number" step="0.01" inputmode="decimal" placeholder="Cantidad" value="${l.cant}">
+        <select data-i="${i}" data-f="ud">${['kg','ud','bdja','caja','gr','L'].map(u=>`<option value="${u}" ${l.ud===u?'selected':''}>${u}</option>`).join('')}${['kg','ud','bdja','caja','gr','L'].includes(l.ud)?'':`<option value="${l.ud}" selected>${l.ud}</option>`}</select>
+        <input data-i="${i}" data-f="lote" placeholder="Nº lote" value="${l.lote}">
+        <input data-i="${i}" data-f="cad" type="date" value="${l.cad}">
+      </div></div>`;
+  });
+  h+='<datalist id="matlist">'+materias.map(m=>`<option value="${m.nombre}">`).join('')+'</datalist>';
+  cont.innerHTML=h;
+  cont.querySelectorAll('input[data-i],select[data-i]').forEach(inp=>{
+    const handler=()=>{const i=+inp.dataset.i,f=inp.dataset.f;recLineas[i][f]=inp.value;
+      if(f==='materia'){const m=materias.find(x=>x.nombre===inp.value);if(m){recLineas[i].ud=m.unidad;const u=cont.querySelector(`select[data-i="${i}"][data-f="ud"]`);if(u)u.value=m.unidad;}}};
+    inp.oninput=handler; inp.onchange=handler;
+  });
+  cont.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{recLineas.splice(+b.dataset.del,1);pintarLineas();});
+}
+function recImagen(ev){
+  const file=ev.target.files[0];if(!file)return;toast('Procesando foto…');
+  const img=new Image(),rd=new FileReader();
+  rd.onload=e=>img.src=e.target.result;
+  img.onload=()=>{let{width:w,height:hh}=img;const MAX=1600;
+    if(w>hh&&w>MAX){hh=hh*MAX/w;w=MAX;}else if(hh>MAX){w=w*MAX/hh;hh=MAX;}
+    const cv=document.createElement('canvas');cv.width=w;cv.height=hh;
+    cv.getContext('2d').drawImage(img,0,0,w,hh);
+    recFoto=cv.toDataURL('image/jpeg',0.85);renderRecibir();toast('Foto lista ✓');};
+  rd.readAsDataURL(file);
+}
+async function leerFacturaIA(){
+  if(!recFoto){toast('Primero haz una foto');return;}
+  toast('Leyendo factura con IA… (10-20 seg)');
+  const btn=$('#iaBtn'); if(btn){btn.disabled=true;btn.textContent='⏳ Leyendo…';}
+  try{
+    const b64=recFoto.split(',')[1];
+    const media=recFoto.substring(5,recFoto.indexOf(';'));
+    const resp=await fetch('/.netlify/functions/leer-factura',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({imagen:b64,media_type:media,materias:materias.map(m=>m.nombre)})
+    });
+    const data=await resp.json();
+    if(data.error){toast('IA: '+data.error);if(btn){btn.disabled=false;btn.textContent='✨ Leer factura automáticamente';}return;}
+    if(data.proveedor&&$('#recProv')){
+      const opts=[...$('#recProv').options].map(o=>o.value);
+      const match=opts.find(o=>o&&norm(o).includes(norm(data.proveedor).split(' ')[0]));
+      if(match)$('#recProv').value=match;
+    }
+    if(data.productos&&data.productos.length){
+      recLineas=data.productos.map(p=>({
+        materia:emparejarMateria(p.nombre),
+        cant:p.cantidad!=null?String(p.cantidad):'',
+        ud:p.unidad||'kg',
+        lote:p.lote||'',
+        cad:p.caducidad||''
+      }));
+      pintarLineas();
+      toast('✓ '+recLineas.length+' productos leídos · revisa y confirma');
+    } else toast('No se detectaron productos, añádelos a mano');
+  }catch(e){toast('Error: '+e.message);}
+  if(btn){btn.disabled=false;btn.textContent='✨ Leer factura automáticamente';}
+}
+function emparejarMateria(nombre){
+  const n=norm(nombre).trim();
+  // solo emparejamos si es idéntico o el catálogo contiene el nombre completo leído
+  let best='',bs=0;
+  materias.forEach(m=>{const mn=norm(m.nombre).trim();let s=0;
+    if(mn===n)s=100;                                   // idéntico
+    else if(mn===n+'s'||n===mn+'s')s=95;               // plural/singular
+    else if(mn.includes(n)&&n.length>=5)s=70;          // el catálogo contiene TODO lo leído
+    if(s>bs){bs=s;best=m.nombre;}});
+  // umbral alto: si no es casi idéntico, respetamos el nombre de la factura
+  return bs>=70?best:nombre;
+}
+async function guardarRecepcion(){
+  const btn=$('#guardarRec');
+  if(btn&&btn.disabled)return;              // evita doble pulsación
+  if(btn){btn.disabled=true;btn.textContent='⏳ Guardando…';}
+  const restaurar=()=>{if(btn){btn.disabled=false;btn.textContent='Guardar recepción y sumar al stock';}};
+  const prov=$('#recProv')?$('#recProv').value:'';
+  const parseCant=v=>parseFloat(String(v==null?'':v).replace(',','.'));
+  const validas=recLineas.filter(l=>l.materia&&l.materia.trim()&&parseCant(l.cant)>0);
+  if(!validas.length){
+    toast('Revisa: cada producto necesita nombre y cantidad (>0)');
+    restaurar();return;
+  }
+  try{
+    const {data:rec,error:e1}=await sb.from('inv_recepciones').insert(
+      {fecha:hoy(),proveedor:prov,foto:recFoto,persona,nota:''}).select().single();
+    if(e1){toast('Error al crear recepción: '+e1.message);restaurar();return;}
+    for(const l of validas){
+      const cant=parseCant(l.cant);
+      const {error:e2}=await sb.from('inv_lotes').insert({materia:l.materia.trim(),lote:l.lote||'',caducidad:l.cad||null,
+        cantidad_inicial:cant,cantidad_actual:cant,unidad:l.ud||'kg',recepcion_id:rec.id,fecha_entrada:hoy()});
+      if(e2){toast('Error al guardar lote ('+l.materia+'): '+e2.message);restaurar();return;}
+      if(!materias.find(m=>m.nombre===l.materia.trim()))
+        await sb.from('inv_materias').insert({nombre:l.materia.trim(),unidad:l.ud||'kg',proveedor:prov}).then(()=>{},()=>{});
+    }
+    recFoto='';recLineas=[];await cargar();toast('Recepción guardada · stock actualizado ✓');
+    tab='inv';document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelector('.tab[data-t="inv"]').classList.add('active');render();
+  }catch(err){
+    toast('Error inesperado: '+(err.message||err));restaurar();
+  }
+}
+
+// ---------- PRODUCIR ----------
+let prodQ='';
+function renderProducir(){
+  let list=RECETAS.filter(r=>r.i.some(i=>i.q));
+  const t=norm(prodQ).trim();
+  if(t)list=list.filter(r=>norm(r.n).includes(t));
+  let h='<div class="wrap"><h3 class="sec">Marcar producción de una receta</h3>';
+  h+='<input id="psearch" placeholder="Buscar receta…" value="'+prodQ+'">';
+  h+='<div class="card" style="margin-top:10px">';
+  list.slice(0,50).forEach(r=>{h+=`<div class="prodrow" data-c="${r.c}"><div class="t">${r.n}</div>
+    <div class="s">${r.c} · ${r.i.length} ingredientes</div></div>`;});
+  h+='</div></div>';
+  $('#app').innerHTML=h;
+  $('#psearch').oninput=e=>{prodQ=e.target.value;const p=e.target.selectionStart;renderProducir();$('#psearch').focus();$('#psearch').setSelectionRange(p,p);};
+  document.querySelectorAll('.prodrow').forEach(el=>el.onclick=()=>abrirProd(el.dataset.c));
+}
+function abrirProd(cod){
+  const r=RECETAS.find(x=>x.c===cod);
+  let h=`<h3>${r.n}</h3><p style="color:var(--gris);font-size:12.5px;margin:2px 0 12px">${r.c}</p>`;
+  h+='<label>Multiplicador (×1, ×2…)</label><input id="pmult" type="number" step="0.5" min="0.5" value="1">';
+  h+='<label>Nº de lote del producto final</label><input id="plote" placeholder="ej. CR-'+hoy().replace(/-/g,'')+'">';
+  h+='<h3 style="font-size:13px;margin:14px 0 6px;color:var(--verde2)">Se descontará del stock:</h3>';
+  h+='<div id="consumos"></div>';
+  h+='<div class="mbtns"><button class="cancel" id="pCancel">Cancelar</button><button class="ok" id="pOk">Confirmar producción</button></div>';
+  $('#sheet').innerHTML=h; $('#modal').classList.add('show');
+  const pintar=()=>{
+    const mult=parseFloat($('#pmult').value)||1;
+    let c='';
+    r.i.forEach(ing=>{
+      if(!ing.q){c+=`<div class="ing"><span style="flex:1">${ing.n}</span><span class="s" style="color:var(--gris)">sin cantidad</span></div>`;return;}
+      const necesita=ing.q*mult;
+      const mat=matchMateria(ing.n);
+      const matObj=materias.find(m=>m.nombre===mat);
+      const udStock=matObj?matObj.unidad:'kg';
+      // convertir ambos a base para comparar
+      const necesitaBase=aBase(necesita,ing.u);
+      const dispBase=lotes.filter(l=>l.materia===mat).reduce((a,l)=>a+aBase(Number(l.cantidad_actual),l.unidad),0);
+      const compat=familia(ing.u)===familia(udStock)||familia(ing.u)==='ud';
+      const falta=compat && dispBase<necesitaBase;
+      const dispMostrar=stockDe(mat);
+      c+=`<div class="ing"><span style="flex:1">${ing.n}</span>
+        <span class="q" style="color:${falta?'var(--rojo)':'var(--verde2)'}">${Math.round(necesita*100)/100} ${ing.u||''}</span></div>
+        ${falta?`<div style="font-size:10.5px;color:var(--rojo);margin:-4px 0 4px">stock: ${Math.round(dispMostrar*100)/100} ${udStock} — insuficiente</div>`:''}
+        ${!compat?`<div style="font-size:10.5px;color:var(--naranja);margin:-4px 0 4px">⚠ revisar unidad (${ing.u} vs ${udStock})</div>`:''}`;
+    });
+    $('#consumos').innerHTML=c;
+  };
+  pintar();
+  $('#pmult').oninput=pintar;
+  $('#pCancel').onclick=()=>$('#modal').classList.remove('show');
+  $('#pOk').onclick=()=>confirmarProd(r);
+}
+function matchMateria(ingNombre){
+  const n=norm(ingNombre);
+  let best=null,bs=0;
+  materias.forEach(m=>{const mn=norm(m.nombre);let s=0;
+    if(mn===n)s=100;else if(mn.includes(n)||n.includes(mn))s=50;
+    else{const w=n.split(/\s+/);if(w.some(x=>x.length>3&&mn.includes(x)))s=20;}
+    if(s>bs){bs=s;best=m.nombre;}});
+  return best||ingNombre;
+}
+async function confirmarProd(r){
+  const mult=parseFloat($('#pmult').value)||1;
+  const loteFinal=$('#plote').value.trim();
+  if(!loteFinal){toast('Pon el nº de lote del producto final');return;}
+  const {data:prod,error:e1}=await sb.from('inv_producciones').insert(
+    {receta_cod:r.c,receta_nombre:r.n,lote_final:loteFinal,multiplicador:mult,fecha:hoy(),persona}).select().single();
+  if(e1){toast('Error: '+e1.message);return;}
+  // descontar por FIFO (primero los que caducan antes)
+  for(const ing of r.i){
+    if(!ing.q)continue;
+    let necesitaBase=aBase(ing.q*mult,ing.u);  // lo que pide la receta, en base
+    const mat=matchMateria(ing.n);
+    const dispo=lotes.filter(l=>l.materia===mat&&Number(l.cantidad_actual)>0)
+                     .sort((a,b)=>(a.caducidad||'9999')<(b.caducidad||'9999')?-1:1);
+    for(const l of dispo){
+      if(necesitaBase<=0.0001)break;
+      const loteBase=aBase(Number(l.cantidad_actual),l.unidad);  // stock del lote en base
+      const usarBase=Math.min(necesitaBase,loteBase);
+      // convertir lo usado de base de vuelta a la unidad del lote
+      const factor = l.unidad&&['kg','l','litro','litros'].includes(l.unidad.toLowerCase())?1000:1;
+      const usarEnUnidadLote=usarBase/factor;
+      const nuevo=Number(l.cantidad_actual)-usarEnUnidadLote;
+      await sb.from('inv_lotes').update({cantidad_actual:nuevo,agotado:nuevo<=0.0001}).eq('id',l.id);
+      await sb.from('inv_consumos').insert({produccion_id:prod.id,materia:mat,lote_id:l.id,
+        lote_texto:l.lote||'',cantidad:usarEnUnidadLote,unidad:l.unidad});
+      necesitaBase-=usarBase;
+    }
+  }
+  $('#modal').classList.remove('show');
+  await cargar();toast('Producción registrada · lote '+loteFinal+' ✓');
+  tab='inv';document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tab[data-t="inv"]').classList.add('active');render();
+}
+
+// ---------- TRAZABILIDAD ----------
+let trazaQ='';
+async function renderTraza(){
+  let h='<div class="wrap"><h3 class="sec">Buscar trazabilidad de un lote</h3>';
+  h+='<input id="tsearch" placeholder="Nº de lote de producto final…" value="'+trazaQ+'">';
+  h+='<div id="trazaRes"></div></div>';
+  $('#app').innerHTML=h;
+  $('#tsearch').oninput=e=>{trazaQ=e.target.value;buscarTraza();};
+  buscarTraza();
+}
+async function buscarTraza(){
+  const cont=$('#trazaRes'); if(!cont)return;
+  const t=trazaQ.trim();
+  if(!t){cont.innerHTML='<div class="empty">Escribe un nº de lote para ver qué materias primas se usaron.</div>';return;}
+  const {data:prods}=await sb.from('inv_producciones').select('*').ilike('lote_final','%'+t+'%').order('fecha',{ascending:false});
+  if(!prods||!prods.length){cont.innerHTML='<div class="empty">No se encontró ese lote.</div>';return;}
+  let h='';
+  for(const p of prods){
+    const {data:cons}=await sb.from('inv_consumos').select('*').eq('produccion_id',p.id);
+    h+=`<div class="traza"><b>${p.receta_nombre}</b> · lote <b>${p.lote_final}</b><br>
+      <span style="font-size:11.5px;color:var(--gris)">${p.fecha} · ×${p.multiplicador} · por ${p.persona||'—'}</span>
+      <div style="margin-top:8px;font-size:12.5px">Materias primas usadas:</div>`;
+    if(cons&&cons.length){
+      cons.forEach(c=>{h+=`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid #eadfce">
+        • ${c.materia} — lote <b>${c.lote_texto||'s/lote'}</b> — ${Math.round(c.cantidad*100)/100} ${c.unidad||''}</div>`;});
+    }else h+='<div style="font-size:12px;color:var(--gris)">Sin consumos registrados.</div>';
+    h+='</div>';
+  }
+  cont.innerHTML=h;
+}
+
+init();
+</script>
+</body>
+</html>
