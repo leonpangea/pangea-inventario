@@ -1,9 +1,4 @@
-// Función segura: recibe la foto de la factura, se la pasa a Claude,
-// devuelve proveedor + productos + cantidades + lotes.
-// La clave API vive aquí en el servidor (variable de entorno), nunca en la app.
-
 exports.handler = async (event) => {
-  // CORS para que la app pueda llamarla
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -28,26 +23,28 @@ exports.handler = async (event) => {
   if (!imagen) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Falta la imagen' }) };
 
   const catalogoTxt = materias.length
-    ? `\n\nCatálogo de materias primas de Pangea (usa EXACTAMENTE estos nombres cuando coincidan, si no, deja el nombre tal cual aparece en la factura):\n${materias.join(', ')}`
+    ? `\n\nPara AYUDARTE a normalizar, este es el catálogo de Pangea (es solo una referencia; NO fuerces los nombres a esta lista si no coinciden claramente):\n${materias.join(', ')}`
     : '';
 
-  const prompt = `Eres un asistente que lee facturas y albaranes de un restaurante en España.
+  const prompt = `Eres un experto leyendo facturas y albaranes de proveedores de un restaurante en España. Tu trabajo es TRANSCRIBIR con precisión lo que aparece, sin inventar.
+
 Analiza esta factura/albarán y extrae los datos en JSON. Responde SOLO con el JSON, sin explicaciones ni markdown.
+
+REGLAS CRÍTICAS:
+- Transcribe el nombre del producto EXACTAMENTE como aparece en la factura. NO inventes ni sustituyas por productos parecidos. Si pone "RELAVIT AUTODISH", escribe "RELAVIT AUTODISH", no "Lavavajillas".
+- Lee la columna de CANTIDAD con mucho cuidado: suele ser un número a la izquierda del precio. Cada línea de producto tiene su cantidad. Si dudas entre cantidad y precio, la cantidad suele ser el número más pequeño y redondo.
+- Si una línea no tiene cantidad clara, pon null en cantidad, pero NO te la saltes.
+- Ignora SOLO las líneas que claramente no son productos: totales, subtotales, IVA, base imponible, portes, descuentos, formas de pago.
+- Números con coma decimal española: "2,5" -> 2.5.
 
 Formato exacto:
 {
-  "proveedor": "nombre del proveedor",
-  "fecha": "YYYY-MM-DD o vacío si no se ve",
+  "proveedor": "nombre del proveedor tal como aparece en la cabecera",
+  "fecha": "YYYY-MM-DD o vacío",
   "productos": [
-    {"nombre": "...", "cantidad": número, "unidad": "kg/g/L/ml/ud/cajas", "lote": "nº de lote si aparece, si no vacío", "caducidad": "YYYY-MM-DD o vacío"}
+    {"nombre": "texto exacto de la factura", "cantidad": número o null, "unidad": "kg/g/L/ml/ud/cajas/packs", "lote": "si aparece, si no vacío", "caducidad": "YYYY-MM-DD o vacío"}
   ]
-}
-
-Reglas:
-- Cantidad siempre como número (usa punto decimal). Si pone "2,5" devuelve 2.5.
-- Si no ves lote o caducidad, deja "".
-- Ignora líneas que no sean productos (totales, IVA, portes, descuentos).
-- Si un producto no tiene unidad clara, pon "ud".${catalogoTxt}`;
+}${catalogoTxt}`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
