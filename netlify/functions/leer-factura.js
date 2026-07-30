@@ -31,17 +31,20 @@ exports.handler = async (event) => {
 Devuelve SOLO un JSON, sin explicaciones ni markdown.
 
 CÓMO ELEGIR LA CANTIDAD (muy importante):
-Estas facturas suelen tener VARIAS columnas de números: "%", "BULTOS", "KG BRUTO", "KG NETO", "PRECIO", "IMPORTE". Debes tomar la cantidad REAL de mercancía en este orden de preferencia:
+Estas facturas suelen tener VARIAS columnas de números. Toma la cantidad REAL de mercancía así:
 1. Si hay columna "KG NETO" (o "NETO"), usa ESE valor y unidad "kg".
-2. Si no, usa "KG BRUTO" y unidad "kg".
+2. Si no hay KG NETO pero hay una columna "CANTIDAD", usa esa cantidad.
 3. Si el producto va por unidades y solo hay "BULTOS"/"UDS", usa ese y unidad "ud".
-NUNCA uses las columnas de PRECIO ni IMPORTE como cantidad. NO uses BULTOS si existe KG NETO.
+NUNCA uses las columnas de PRECIO ni IMPORTE como cantidad.
 
 NOMBRES:
-- Copia la descripción tal cual (ej. "ALBAHACA Bdja", "RUCULA 100Gr", "SANDIA PALOT"). Limpia solo abreviaturas obvias de formato pero NO cambies el producto.
+- Copia la descripción/concepto tal cual (ej. "BOTE CANELA POLVO", "KG COBERT EDELWEISS BLANCA 36%", "HARINA GRAN FUERZA"). NO cambies el producto por otro parecido.
 
-LOTE:
-- Si hay una columna o texto "LOTE" con un número, pon SOLO EL NÚMERO en "lote", sin la palabra "LOTE" ni dos puntos. Ejemplo: si ves "LOTE: 45433", devuelve "45433".
+LOTE Y CADUCIDAD (importante):
+- Muchos productos tienen una SEGUNDA LÍNEA justo debajo del nombre con el formato "LOTE:XXXX   F.CAD.:dd-mm-aaaa".
+- En "lote" pon SOLO lo que va después de "LOTE:" (ej. de "LOTE:PD-C3906" pon "PD-C3906"; de "LOTE:6070" pon "6070"; de "LOTE:151352" pon "151352"). Sin la palabra LOTE ni dos puntos.
+- El lote puede tener letras y números mezclados (ej. "BB1CTJ1", "024B08275E5"). Cópialo completo y exacto.
+- En "caducidad" pon la fecha de "F.CAD.:" convertida a formato YYYY-MM-DD (ej. "31-12-2028" -> "2028-12-31").
 
 Ignora líneas que no son productos: bases, IVA, cuotas, totales, formas de pago, IBAN.
 Coma decimal española: "4,50" -> 4.5
@@ -51,7 +54,7 @@ Formato:
   "proveedor": "de la cabecera",
   "fecha": "YYYY-MM-DD o vacío",
   "productos": [
-    {"nombre": "descripción exacta", "cantidad": número o null, "unidad": "kg/ud/L/cajas", "lote": "solo el número", "caducidad": ""}
+    {"nombre": "descripción exacta", "cantidad": número o null, "unidad": "kg/ud/L/cajas", "lote": "solo el código del lote", "caducidad": "YYYY-MM-DD o vacío"}
   ]
 }${catalogoTxt}`;
 
