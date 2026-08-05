@@ -38,18 +38,22 @@ Para el campo "cantidad":
 3. Solo si no hay CANTIDAD, usa CAJAS/BULTOS.
 NUNCA uses PRECIO, DTO ni IMPORTE.
 
-═══ PESO POR BULTO (importante para Gutiérrez y similares) ═══
-Muchos productos llevan el peso de cada bulto DENTRO del nombre, ej: "HARINA MASA HOJALDRE 12.5KG SFOGLIA", "MEZCLA FRUTOS ROJOS 1KG", "PATE TARTUFO 500GR".
-- Si detectas un peso en el nombre, ponlo en el campo "peso_bulto" en KILOS (ej. "12.5KG" -> 12.5 ; "1KG" -> 1 ; "500GR" -> 0.5 ; "90GR" -> 0.09).
-- Si NO hay peso en el nombre, pon "peso_bulto": null.
-NO multipliques tú: solo devuelve la cantidad y el peso_bulto por separado. El sistema hará la multiplicación.
+═══ PESO/VOLUMEN POR BULTO (importante para Gutiérrez y similares) ═══
+Muchos productos llevan el peso O EL VOLUMEN de cada bulto DENTRO del nombre:
+- Peso: "HARINA 12.5KG", "MEZCLA 1KG", "PATE 500GR", "CHILI 210GR"
+- Volumen: "SIROPE DE ARCE 1L", "VINAGRE SUSHI 20L"
+Rellena "peso_bulto" con el valor convertido a la unidad base:
+- Si es peso (KG/GR): en KILOS (ej. "12.5KG" -> 12.5 ; "500GR" -> 0.5 ; "210GR" -> 0.21) y pon "unidad": "kg".
+- Si es volumen (L/LITRO): en LITROS (ej. "1L" -> 1 ; "20L" -> 20) y pon "unidad": "L".
+- Si NO hay peso ni volumen en el nombre, pon "peso_bulto": null.
+NO multipliques tú: devuelve cantidad y peso_bulto por separado. El sistema multiplica.
 
 ═══ NOMBRE (COPIA EXACTA) ═══
 Transcribe la descripción COMPLETA palabra por palabra. NO la acortes, NO quites "cong", "congelada", "entera", "Arotz". NO asumas otro producto. Ej: "FRAMBUESA ENTERA CONG AROTZ" es congelada, NUNCA "frambuesa fresca".
 
 ═══ LOTE Y CADUCIDAD ═══
-- Segunda línea bajo el nombre: "Lote: XXXX   F.Cad: dd-mm-aaaa" (con o sin puntos).
-- "lote": solo el código tras "Lote:" (letras+números: 044C, AA24102711, BB1CTJ1). Completo y exacto.
+- Segunda línea bajo el nombre: "Lote: XXXX   F.Cad: dd-mm-aaaa" (con o sin puntos). MUCHOS productos NO tienen lote: si no hay, deja "lote":"" y "caducidad":"". No te lo inventes.
+- "lote": solo el código tras "Lote:" (letras+números: 044C, AA24102711, BB1CTJ1, B65042815). Completo y exacto.
 - "caducidad": fecha tras "F.Cad"/"F.CAD" a YYYY-MM-DD (origen dd-mm-aaaa, ej "24-04-2029" -> "2029-04-24").
 
 Ignora líneas no-producto: "Albarán:... Fecha:...", bases, IVA, cuotas, totales, pago, IBAN.
@@ -60,7 +64,7 @@ Formato:
   "proveedor": "de la cabecera",
   "fecha": "YYYY-MM-DD o vacío",
   "productos": [
-    {"nombre": "descripción COMPLETA", "cantidad": número, "unidad": "kg/ud/L", "peso_bulto": número_en_kg_o_null, "lote": "código", "caducidad": "YYYY-MM-DD o vacío"}
+    {"nombre": "descripción COMPLETA", "cantidad": número, "unidad": "kg/ud/L", "peso_bulto": número_o_null, "lote": "código o vacío", "caducidad": "YYYY-MM-DD o vacío"}
   ]
 }${catalogoTxt}`;
 
