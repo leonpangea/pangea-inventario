@@ -23,38 +23,44 @@ exports.handler = async (event) => {
   if (!imagen) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Falta la imagen' }) };
 
   const catalogoTxt = materias.length
-    ? `\n\nCatálogo de Pangea SOLO como referencia ortográfica. NO cambies un producto por otro del catálogo: si la factura dice "Arándano granel", la respuesta es "Arándano granel", nunca "Arándanos congelados". Lista:\n${materias.join(', ')}`
+    ? `\n\nHay un catálogo de Pangea que puedes ver SOLO para corregir faltas de ortografía si el nombre ya coincide. PROHIBIDO cambiar un producto por otro del catálogo aunque se parezca. Si la factura dice "Frambuesa entera cong", la respuesta es "Frambuesa entera cong", JAMÁS "Frambuesa fresca". Catálogo:\n${materias.join(', ')}`
     : '';
 
-  const prompt = `Eres un experto leyendo albaranes y facturas de proveedores de un restaurante en España. TRANSCRIBE lo que ves. NO inventes ni sustituyas productos.
+  const prompt = `Eres un experto leyendo albaranes y facturas de proveedores de un restaurante en España. Tu única tarea es TRANSCRIBIR exactamente lo que aparece. NO inventes, NO acortes, NO sustituyas.
 
 Devuelve SOLO un JSON, sin explicaciones ni markdown.
 
-CÓMO ELEGIR LA CANTIDAD (muy importante):
-Estas facturas suelen tener VARIAS columnas de números: "%", "CAJAS", "BULTOS", "CANTIDAD", "KG BRUTO", "KG NETO", "PRECIO", "DTO", "IMPORTE". Toma la cantidad REAL de mercancía así:
-1. Si hay columna "KG NETO" (o "NETO"), usa ESE valor y unidad "kg".
-2. Si no hay KG NETO pero hay una columna "CANTIDAD", usa esa cantidad (NO la columna CAJAS ni BULTOS).
-3. Si el producto solo tiene "CAJAS"/"BULTOS"/"UDS", usa ese y unidad "ud".
-NUNCA uses las columnas de PRECIO, DTO ni IMPORTE como cantidad.
+═══ CANTIDAD ═══
+Las facturas tienen varias columnas de números, típicamente: "CAJAS"/"BULTOS", "CANTIDAD", "PRECIO", "DTO", "IMPORTE", y a veces "KG NETO".
+Para el campo "cantidad":
+1. Si existe "KG NETO", usa KG NETO (unidad "kg").
+2. Si NO hay KG NETO, usa la columna "CANTIDAD" (nunca CAJAS/BULTOS si hay CANTIDAD).
+3. Solo si no hay CANTIDAD, usa CAJAS/BULTOS.
+NUNCA uses PRECIO, DTO ni IMPORTE.
 
-NOMBRES:
-- Copia la descripción/concepto tal cual (ej. "FRESA ENTERA CONG AROTZ KG", "PATE TARTUFO NERO 500GR"). NO cambies el producto por otro parecido.
+═══ PESO POR BULTO (importante para Gutiérrez y similares) ═══
+Muchos productos llevan el peso de cada bulto DENTRO del nombre, ej: "HARINA MASA HOJALDRE 12.5KG SFOGLIA", "MEZCLA FRUTOS ROJOS 1KG", "PATE TARTUFO 500GR".
+- Si detectas un peso en el nombre, ponlo en el campo "peso_bulto" en KILOS (ej. "12.5KG" -> 12.5 ; "1KG" -> 1 ; "500GR" -> 0.5 ; "90GR" -> 0.09).
+- Si NO hay peso en el nombre, pon "peso_bulto": null.
+NO multipliques tú: solo devuelve la cantidad y el peso_bulto por separado. El sistema hará la multiplicación.
 
-LOTE Y CADUCIDAD (importante):
-- Muchos productos tienen una SEGUNDA LÍNEA justo debajo del nombre con el lote y la caducidad. Puede aparecer como "LOTE:XXXX   F.CAD.:dd-mm-aaaa" o "Lote: XXXX   F.Cad: dd-mm-aaaa" (con o sin puntos, mayúsculas o minúsculas).
-- En "lote" pon SOLO el código que va tras "LOTE:"/"Lote:" (ej. de "Lote: A54102412" pon "A54102412"; de "LOTE:6070" pon "6070"). Sin la palabra LOTE ni dos puntos.
-- El lote puede tener letras y números mezclados (ej. "BB1CTJ1", "044C", "AA24102711", "024B08275E5"). Cópialo completo y exacto, sin cortar letras del principio ni del final.
-- En "caducidad" pon la fecha que sigue a "F.CAD."/"F.Cad" convertida a YYYY-MM-DD (ej. "24-04-2029" -> "2029-04-24").
+═══ NOMBRE (COPIA EXACTA) ═══
+Transcribe la descripción COMPLETA palabra por palabra. NO la acortes, NO quites "cong", "congelada", "entera", "Arotz". NO asumas otro producto. Ej: "FRAMBUESA ENTERA CONG AROTZ" es congelada, NUNCA "frambuesa fresca".
 
-Ignora líneas que no son productos: bases, IVA, cuotas, totales, formas de pago, IBAN, líneas de "Albarán: ... Fecha: ...".
-Coma decimal española: "4,50" -> 4.5
+═══ LOTE Y CADUCIDAD ═══
+- Segunda línea bajo el nombre: "Lote: XXXX   F.Cad: dd-mm-aaaa" (con o sin puntos).
+- "lote": solo el código tras "Lote:" (letras+números: 044C, AA24102711, BB1CTJ1). Completo y exacto.
+- "caducidad": fecha tras "F.Cad"/"F.CAD" a YYYY-MM-DD (origen dd-mm-aaaa, ej "24-04-2029" -> "2029-04-24").
+
+Ignora líneas no-producto: "Albarán:... Fecha:...", bases, IVA, cuotas, totales, pago, IBAN.
+Coma decimal: "4,50" -> 4.5
 
 Formato:
 {
   "proveedor": "de la cabecera",
   "fecha": "YYYY-MM-DD o vacío",
   "productos": [
-    {"nombre": "descripción exacta", "cantidad": número o null, "unidad": "kg/ud/L/cajas", "lote": "solo el código del lote", "caducidad": "YYYY-MM-DD o vacío"}
+    {"nombre": "descripción COMPLETA", "cantidad": número, "unidad": "kg/ud/L", "peso_bulto": número_en_kg_o_null, "lote": "código", "caducidad": "YYYY-MM-DD o vacío"}
   ]
 }${catalogoTxt}`;
 
