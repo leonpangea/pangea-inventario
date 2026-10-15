@@ -100,6 +100,7 @@
     <button class="tab" data-t="rec">📥 Recibir</button>
     <button class="tab" data-t="recetas">📖 Recetas</button>
     <button class="tab" data-t="prod">🍳 Producir</button>
+    <button class="tab" data-t="env">🚚 Envíos</button>
     <button class="tab" data-t="traz">🔍 Trazabilidad</button>
   </div>
 </header>
@@ -396,6 +397,7 @@ function render(){
   else if(tab==='rec')renderRecibir();
   else if(tab==='prod')renderProducir();
   else if(tab==='recetas')renderRecetas();
+  else if(tab==='env')renderEnvios();
   else renderTraza();
 }
 
@@ -721,6 +723,139 @@ function deComparable(v,l,k){ // de gramos/ud a la unidad del lote
   if(familia(u)==='ud'){const p=pesoUd(k);return p?v/p:v;}
   return ['kg','l','litro','litros'].includes(u)?v/1000:v;
 }
+// ---------- ENVÍOS A LOS LOCALES ----------
+// Lo que sale del obrador hacia León o A Coruña: descuenta del stock por FIFO
+// (igual que una producción) y queda guardado en Supabase (tmp_archivos · envio_…).
+const LOCALES=['León','A Coruña'];
+let envDest=LOCALES[0], envLineas=[], envQ='', envHist=[], envAbierto=null, envCargado=false;
+
+async function cargarEnvios(){
+  try{
+    const {data}=await sb.from('tmp_archivos').select('id,contenido').like('id','envio_%');
+    envHist=(data||[]).map(r=>{try{return Object.assign({id:r.id},JSON.parse(r.contenido));}catch(e){return null;}})
+      .filter(Boolean).sort((a,b)=>a.id<b.id?1:-1);
+  }catch(e){envHist=[];}
+  envCargado=true;
+}
+async function siguienteEnvio(){
+  const pre='envio_'+hoy()+'_'; let n=0;
+  try{
+    const {data}=await sb.from('tmp_archivos').select('id').like('id',pre+'%');
+    (data||[]).forEach(r=>{const m=String(r.id).match(/_(\d+)$/); if(m)n=Math.max(n,parseInt(m[1],10));});
+  }catch(e){}
+  return pre+String(n+1).padStart(2,'0');
+}
+// unidades en las que se puede escribir la cantidad; primero la del stock
+function udsEnvio(k){
+  const fam=stockGrupo(k).fam, u=String(unidadGrupo(k)||'').toLowerCase();
+  let l = fam==='peso' ? ['gr','kg'] : fam==='vol' ? ['ml','L'] : [];
+  if(!l.length)return [unidadGrupo(k)||'ud'];
+  const i=l.findIndex(x=>x.toLowerCase()===u);
+  if(i>0)l=[l[i]].concat(l.filter((x,j)=>j!==i));
+  return l;
+}
+function stockEnviable(){
+  return gruposStock().filter(g=>g.s.base>0)
+    .map(g=>({k:g.k, n:g.nombre, txt:fmtCant(g.s.base,g.s.fam)}))
+    .sort((a,b)=>a.n.localeCompare(b.n,'es'));
+}
+function renderEnvios(){
+  if(!envCargado)cargarEnvios().then(()=>{if(tab==='env')renderEnvios();});
+  const lista=stockEnviable(), t=norm(envQ).trim();
+  const vis=t?lista.filter(g=>norm(g.n).includes(t)):lista;
+  let h='<div class="wrap">';
+  h+='<h3 class="sec">¿A dónde va?</h3><div class="card" style="display:flex;gap:8px;padding:10px">';
+  LOCALES.forEach(L=>{h+='<button class="pbtn envdest" data-d="'+escH(L)+'" style="flex:1;margin:0;'+(L===envDest?'background:var(--verde2);color:#fff':'')+'">'+escH(L)+'</button>';});
+  h+='</div>';
+  h+='<h3 class="sec">Lo que se envía'+(envLineas.length?' · '+envLineas.length:'')+'</h3><div class="card">';
+  if(!envLineas.length)h+='<div class="empty" style="padding:16px">Busca abajo y toca lo que vaya en el envío.</div>';
+  envLineas.forEach((l,i)=>{
+    const s=stockGrupo(l.k), hayTxt=fmtCant(s.base,s.fam);
+    const need=comparable(l.q||0,l.u,l.k);
+    const hay=ordenLotes(l.k).filter(x=>comparable(Number(x.cantidad_actual),x.unidad,l.k).f===need.f)
+      .reduce((a,x)=>a+comparable(Number(x.cantidad_actual),x.unidad,l.k).v,0);
+    const falta=l.q>0&&hay<need.v-0.0001;
+    h+='<div class="lote-item"><div class="top"><span>'+escH(l.n)+'</span><button class="del" data-envdel="'+i+'">🗑</button></div>'
+      +'<div style="display:flex;gap:7px;align-items:center">'
+      +'<input type="number" step="0.01" min="0" inputmode="decimal" data-envq="'+i+'" value="'+(l.q||'')+'" placeholder="cantidad" style="flex:1">'
+      +'<select data-envu="'+i+'" style="width:82px;padding:5px;font-size:12px">'
+      + udsEnvio(l.k).map(u=>'<option'+(u===l.u?' selected':'')+'>'+escH(u)+'</option>').join('')
+      +'</select></div>'
+      +'<div style="font-size:10.5px;margin-top:4px;color:'+(falta?'var(--rojo)':'var(--gris)')+'">en stock: '+escH(hayTxt)+(falta?' — no llega':'')+'</div></div>';
+  });
+  h+='</div>';
+  if(envLineas.some(l=>l.q>0))
+    h+='<button class="btn" id="envOk" style="margin:10px 0">Registrar envío a '+escH(envDest)+'</button>';
+  h+='<h3 class="sec">Añadir del stock</h3><input id="envsearch" placeholder="Buscar producto…" value="'+escH(envQ)+'">';
+  h+='<div class="card">';
+  if(!vis.length)h+='<div class="empty" style="padding:16px">Nada con ese nombre.</div>';
+  vis.slice(0,60).forEach(g=>{h+='<div class="prodrow" data-envadd="'+escH(g.k)+'"><div class="t">'+escH(g.n)+'</div><div class="s">'+escH(g.txt)+'</div></div>';});
+  h+='</div>';
+  if(envHist.length){
+    h+='<h3 class="sec">Últimos envíos</h3><div class="card">';
+    envHist.slice(0,12).forEach(e=>{
+      const n=(e.lineas||[]).length;
+      h+='<div class="prodrow" data-envver="'+escH(e.id)+'"><div class="t">'+escH(e.destino)+' · '+escH(e.fecha)+'</div>'
+       +'<div class="s">'+n+' producto'+(n===1?'':'s')+(e.persona?' · '+escH(e.persona):'')+'</div></div>';
+      if(envAbierto===e.id){
+        h+='<div style="padding:2px 12px 12px;font-size:11.5px;color:var(--gris)">';
+        (e.lineas||[]).forEach(l=>{h+='• '+escH(l.n)+': '+escH(String(l.q))+' '+escH(l.u)+(l.lotes&&l.lotes.length?' — lote '+escH(l.lotes.map(x=>x.lote||'s/lote').join(' + ')):'')+'<br>';});
+        h+='</div>';
+      }
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  $('#app').innerHTML=h;
+  document.querySelectorAll('.envdest').forEach(b=>b.onclick=()=>{envDest=b.dataset.d;renderEnvios();});
+  document.querySelectorAll('[data-envadd]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.envadd;
+    if(envLineas.some(l=>l.k===k)){toast('Ya está en el envío');return;}
+    const g=stockEnviable().find(x=>x.k===k); if(!g)return;
+    envLineas.push({k:g.k,n:g.n,u:udsEnvio(g.k)[0],q:null}); envQ=''; renderEnvios();
+  });
+  document.querySelectorAll('[data-envdel]').forEach(b=>b.onclick=()=>{envLineas.splice(+b.dataset.envdel,1);renderEnvios();});
+  document.querySelectorAll('[data-envu]').forEach(sel=>sel.onchange=()=>{envLineas[+sel.dataset.envu].u=sel.value;renderEnvios();});
+  document.querySelectorAll('[data-envq]').forEach(inp=>inp.oninput=()=>{
+    const i=+inp.dataset.envq, antes=envLineas[i].q;
+    envLineas[i].q=parseFloat(String(inp.value).replace(',','.'))||0;
+    if(!antes!==!envLineas[i].q){const p=inp.selectionStart;renderEnvios();const n=$('[data-envq="'+i+'"]');if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}}
+  });
+  document.querySelectorAll('[data-envver]').forEach(b=>b.onclick=()=>{
+    envAbierto = envAbierto===b.dataset.envver ? null : b.dataset.envver; renderEnvios();
+  });
+  const s=$('#envsearch');
+  if(s)s.oninput=e=>{envQ=e.target.value;const p=e.target.selectionStart;renderEnvios();$('#envsearch').focus();$('#envsearch').setSelectionRange(p,p);};
+  const ok=$('#envOk'); if(ok)ok.onclick=confirmarEnvio;
+}
+async function confirmarEnvio(){
+  const btn=$('#envOk'); if(btn&&btn.disabled)return;
+  const lineas=envLineas.filter(l=>l.q>0);
+  if(!lineas.length){toast('Pon cuánto va de cada cosa');return;}
+  if(btn){btn.disabled=true;btn.textContent='Registrando…';}
+  const id=await siguienteEnvio();
+  const guardadas=[], incompleto=[];
+  for(const l of lineas){
+    const need=comparable(l.q,l.u,l.k);
+    const usados=[]; let servido=0;
+    for(const p of planLotes(l.k,need)){
+      const enUnidad=deComparable(p.usar,p.l,l.k);
+      const nuevo=Number(p.l.cantidad_actual)-enUnidad;
+      await sb.from('inv_lotes').update({cantidad_actual:nuevo,agotado:nuevo<=0.0001}).eq('id',p.l.id);
+      usados.push({lote_id:p.l.id,lote:p.l.lote||'',cantidad:Math.round(enUnidad*100)/100,unidad:p.l.unidad});
+      servido+=p.usar;
+    }
+    if(servido<need.v-0.0001)incompleto.push(l.n);
+    guardadas.push({k:l.k,n:l.n,q:l.q,u:l.u,lotes:usados});
+  }
+  const envio={fecha:hoy(),destino:envDest,persona:persona||'',lineas:guardadas};
+  const {error}=await sb.from('tmp_archivos').insert({id,contenido:JSON.stringify(envio)});
+  toast(error ? 'Stock descontado, pero no se guardó el albarán: '+error.message
+              : 'Envío a '+envDest+' registrado ✓'+(incompleto.length?' · faltaba stock de: '+incompleto.join(', '):''));
+  envLineas=[]; envQ=''; envCargado=false;
+  await cargar(); await cargarEnvios(); renderEnvios();
+}
+
 // ---------- LO PRODUCIDO ENTRA EN EL STOCK ----------
 // Lee el rendimiento y la vida util de la ficha para proponerlos al confirmar.
 const UDS_SALIDA=['gr','kg','ml','L','ud','bolsa','lata','bandeja','bote','barqueta'];
