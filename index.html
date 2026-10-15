@@ -206,7 +206,9 @@ const DESCRIPTORES=['pomada','fria','frio','derretida','derretido','trozo','past
   'coccion','almibar','mg','c','cubo','pequeno','grande','picada','picado','fina','fino','troceada','troceado','hoja'];
 // Palabras que hacen que sea OTRO producto: nunca se juntan si una lo lleva y la otra no
 // (salvia fresca ≠ salvia seca, harina de fuerza ecológica ≠ harina de fuerza, fresa congelada ≠ fresa)
-const DISTINTIVOS=['fresco','seco','ecologico','congelado','deshidratado','ahumado'];
+const DISTINTIVOS=['fresco','seco','ecologico','congelado','deshidratado','ahumado','singluten','sinlactosa','sinazucar','sinhuevo','sinalcohol','sincafeina'];
+// "sin sal" sigue siendo sal, pero "sin gluten" o "sin lactosa" son OTRO producto: esa marca se conserva
+const SINMARCA=['gluten','lactosa','azucar','huevo','alcohol','cafeina'];
 const UNIFICA={'fresca':'fresco','seca':'seco','ecologica':'ecologico','eco':'ecologico','bio':'ecologico','congelada':'congelado','deshidratada':'deshidratado','ahumada':'ahumado'};
 const mismoTipo=(a,b)=>DISTINTIVOS.every(d=>a.includes(d)===b.includes(d));
 const RELLENO=['t14','celorrio','lata','tarro','bote','frasco','envase','pack','flor','canadiense','japonesa','bdja','bandeja','manojo','malla','caja','bolsa','saco','granel','brick','molido','molida','flore','grano','natural','puro','pura','pra','premium','original','calidad','extra','superior','bourbon','madagascar'];
@@ -228,7 +230,7 @@ function singular(w){
 function palabras(n){
   let s=norm(n).replace(/\([^)]*\)/g,' ').replace(/\d+(?:[.,]\d+)?\s*°?\s*c\b/g,' ').replace(/°/g,' ');
   let w=s.replace(/[^a-z0-9%ñ]+/g,' ').trim().split(' ').filter(Boolean).filter(x=>!VACIAS.includes(x)).map(singular);
-  const i=w.indexOf('sin'); if(i>=0)w.splice(i,2);                 // "sin sal" no es sal
+  const i=w.indexOf('sin'); if(i>=0){const q=w[i+1];w.splice(i,2);if(q&&SINMARCA.includes(q))w.push('sin'+q);}   // "sin sal" no es sal; "sin gluten" si es otro producto
   w=w.filter(x=>!/\d/.test(x.replace(/%$/,'').replace(/^\d+%$/,'pct'))||/^\d+%$/.test(x)).filter(x=>!/^\d+$/.test(x)&&!DESCRIPTORES.includes(x));
   w=w.map(x=>UNIFICA[x]||x);
   if(w.some(x=>['bdja','bandeja','manojo','barqueta'].includes(x))&&!w.includes('seco')&&!w.includes('fresco'))w.push('fresco');   // en bandeja o manojo = fresco
