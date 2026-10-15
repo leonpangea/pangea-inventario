@@ -732,13 +732,25 @@ function rendimientoDe(cod){
   const f=RECETAS_FULL[cod]||{};
   const txt=String(f.rendimiento||'').trim();
   if(!txt)return {q:0,u:'gr'};
-  // "19 bolsas de 500 gr" / "32 latas" / "~60 litros" / "9.550 gr"
-  let m=txt.match(/(\d[\d.,]*)\s*(bolsas?|latas?|bandejas?|botes?|barquetas?|uds?|unidades?)/i);
+  // 1) si el rendimiento habla de envases, esa es la unidad con la que se guarda
+  let m=txt.match(/(\d[\d.,]*)\s*(bolsas?|latas?|bandejas?|botes?|barquetas?)/i);
   if(m){const u=m[2].toLowerCase();
-        return {q:numEs(m[1]), u:u.startsWith('bolsa')?'bolsa':u.startsWith('lata')?'lata':u.startsWith('bandeja')?'bandeja':u.startsWith('bote')?'bote':u.startsWith('barqueta')?'barqueta':'ud'};}
+    return {q:numEs(m[1]), u:u.startsWith('bolsa')?'bolsa':u.startsWith('lata')?'lata':u.startsWith('bandeja')?'bandeja':u.startsWith('bote')?'bote':'barqueta'};}
+  // 2) manda el PRIMER numero; la unidad es la palabra que lo sigue
+  //    "6 panes de ~1 kg" -> 6 ud   |   "280 gr aprox." -> 280 gr
+  m=txt.match(/(\d[\d.,]*)\s*([a-zA-ZñÑáéíóúÁÉÍÓÚ]+)/);
+  if(m){
+    const q=numEs(m[1]), w=m[2].toLowerCase();
+    if(/^(kg|kilos?)$/.test(w))return {q,u:'kg'};
+    if(/^(gr|g|gramos?)$/.test(w))return {q,u:'gr'};
+    if(/^ml$/.test(w))return {q,u:'ml'};
+    if(/^(l|lt|litros?)$/.test(w))return {q,u:'L'};
+    return {q,u:'ud'};   // panes, pitas, placas, bagels, raciones, baldes...
+  }
+  // 3) por si el numero va pegado a un guion ("~1,7-1,85 kg")
   m=txt.match(/(\d[\d.,]*)\s*(kg|gr|g\b|ml|l\b|litros?)/i);
   if(m){const u=m[2].toLowerCase();
-        return {q:numEs(m[1]), u:u==='kg'?'kg':u.startsWith('l')?'L':u==='ml'?'ml':'gr'};}
+    return {q:numEs(m[1]), u:u==='kg'?'kg':u.startsWith('l')?'L':u==='ml'?'ml':'gr'};}
   return {q:numEs(txt),u:'gr'};
 }
 function diasVida(cod){
