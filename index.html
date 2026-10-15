@@ -989,9 +989,13 @@ function abrirProd(cod){
 }
 // Orden de uso de los lotes de un ingrediente: primero el elegido (si lo hay), luego el que caduca antes,
 // y a igual caducidad el que entró antes (FIFO).
+// Un lote con menos cantidad de la que entro es el que esta abierto: en el obrador
+// se termina antes de abrir otro. Se salta si ya esta caducado.
+const empezado=l=>(Number(l.cantidad_actual)<Number(l.cantidad_inicial)-0.0001&&!(l.caducidad&&l.caducidad<hoy()))?0:1;
 function ordenLotes(k,elegido){
   return lotesGrupo(k).filter(l=>Number(l.cantidad_actual)>0).sort((a,b)=>
     (b.id===elegido)-(a.id===elegido)||
+    empezado(a)-empezado(b)||
     (a.caducidad||'9999-12-31').localeCompare(b.caducidad||'9999-12-31')||
     (a.fecha_entrada||'').localeCompare(b.fecha_entrada||'')||a.id-b.id);
 }
