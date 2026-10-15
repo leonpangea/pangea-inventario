@@ -731,7 +731,7 @@ let envDest=LOCALES[0], envLineas=[], envQ='', envHist=[], envAbierto=null, envC
 
 async function cargarEnvios(){
   try{
-    const {data}=await sb.from('tmp_archivos').select('id,contenido').like('id','envio_%');
+    const {data}=await sb.from('tmp_archivos').select('id,contenido').like('id','envio_20%');
     envHist=(data||[]).map(r=>{try{return Object.assign({id:r.id},JSON.parse(r.contenido));}catch(e){return null;}})
       .filter(Boolean).sort((a,b)=>a.id<b.id?1:-1);
   }catch(e){envHist=[];}
