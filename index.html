@@ -161,6 +161,7 @@ function aplicarFilas(data){
       i:(x.ingredientes||[]).map(r=>Array.isArray(r)?{n:String(r[0]||''),q:cantNum(r[1]),u:String(r[2]||''),o:r[3]||''}:{n:r.n,q:cantNum(r.q),u:r.u||''})
         .map(i=>NO_INGREDIENTE.includes(claveBase(i.n))||/^(total|rendimiento|rinde)\b/i.test(i.n.trim())?{...i,q:null}:i)}));
   RECETAS=RECETAS_ALL.filter(r=>/^PB-OBR-/.test(r.c));
+  ajustarYemas(); marcarInternos();
   RECETAS_FULL={}; data.forEach(x=>RECETAS_FULL[x.codigo]=x);
 }
 async function cargarRecetas(forzar){
@@ -914,10 +915,11 @@ function abrirProd(cod){
     +'<select id="psaleu" style="width:104px">'+UDS_SALIDA.map(u=>'<option'+(u===rend.u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>';
   h+='<div style="font-size:10.5px;color:var(--gris);margin:-6px 0 12px">Ficha: '+escH(((RECETAS_FULL[cod]||{}).rendimiento)||'sin rendimiento')
     +(dv?' · caduca a los '+dv+' días':' · sin vida útil en la ficha')+'. Corrígelo si ha salido otra cosa.</div>';
+  h+=piezasHTML();
   h+='<h3 style="font-size:13px;margin:14px 0 6px;color:var(--verde2)">Se descontará del stock:</h3>';
   h+='<div id="consumos"></div>';
   h+='<div class="mbtns"><button class="cancel" id="pCancel">Cancelar</button><button class="ok" id="pOk">Confirmar producción</button></div>';
-  $('#sheet').innerHTML=h; $('#modal').classList.add('show');
+  $('#sheet').innerHTML=h; $('#modal').classList.add('show'); ligarPiezas(r);
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   prodLote=r.i.map(()=>null);
   const pintar=()=>{
@@ -929,7 +931,7 @@ function abrirProd(cod){
     let c='';
     r.i.forEach((ing,idx)=>{
       if(!ing.q){c+=`<div class="ing"><span style="flex:1">${esc(ing.n)}</span><span class="s" style="color:var(--gris)">sin cantidad</span></div>`;return;}
-      const motivoSinStock=SIN_STOCK[keyDe(ing.n)];
+      const motivoSinStock=ing.interno?'Se prepara en esta misma receta (arriba): no se descuenta del stock':SIN_STOCK[keyDe(ing.n)];
       if(motivoSinStock){c+=`<div class="ing"><span style="flex:1">${esc(ing.n)}</span><span class="q" style="color:var(--gris)">${nEs(Math.round(ing.q*mult*100)/100)} ${esc(ing.u||'')}</span></div><div style="font-size:10.5px;margin:-4px 0 4px;color:var(--gris)">${esc(motivoSinStock)}</div>`;return;}
       const necesita=ing.q*mult, k=keyDe(ing.n), need=comparable(necesita,ing.u,k);
       const noExiste=!materias.some(x=>keyDe(x.nombre)===k);
@@ -1024,6 +1026,78 @@ async function siguienteLote(r){
   while(usados.has(lote)){n++;lote=pref+'-'+String(n).padStart(2,'0');}
   return lote;
 }
+// ---------- PIEZAS: una misma masa da varias piezas (croissant, napolitana, bonet…) ----------
+// Cada pieza tiene su propio lote, hijo del lote de la masa: DUL025-261019-01-CRO, -NAP…
+let CFG_PIEZAS=null;
+async function cargarCfgPiezas(){
+  if(CFG_PIEZAS)return CFG_PIEZAS;
+  try{const {data}=await sb.from('tmp_archivos').select('contenido').eq('id','cfg_piezas');CFG_PIEZAS=data&&data[0]?JSON.parse(data[0].contenido||'{}'):{};}catch(e){CFG_PIEZAS={};}
+  return CFG_PIEZAS;
+}
+async function guardarCfgPiezas(cod,lista,mult){
+  const c=await cargarCfgPiezas(); c[cod]=lista.map(p=>({n:p.n,q:mult?Math.round(p.q/mult*100)/100:p.q}));
+  await sb.from('tmp_archivos').delete().eq('id','cfg_piezas');
+  await sb.from('tmp_archivos').insert({id:'cfg_piezas',contenido:JSON.stringify(c)});
+}
+function llevaPiezas(r){const f=RECETAS_FULL[r.c]||{};return /lamin|boller|hojaldre/i.test(String(f.tipo||''))||!!(CFG_PIEZAS&&CFG_PIEZAS[r.c]);}
+function rindePiezas(r){ // "RINDE · 70 · 140 croissants" → 70 por ×1
+  const fila=r.i.find(i=>/^(rinde|rendimiento)\b/i.test(String(i.n).trim()));
+  const m=fila&&String(fila.o||'').match(/(\d+(?:[.,]\d+)?)/); return m?parseFloat(m[1].replace(',','.')):null;
+}
+function piezasPorDefecto(r){
+  const g=CFG_PIEZAS&&CFG_PIEZAS[r.c]; if(g&&g.length)return g.map(x=>({n:x.n,q:x.q}));
+  const cap=t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase();
+  const lista=[{n:cap(String(r.n).split(/[—(·-]/)[0].trim()),q:rindePiezas(r)}];
+  RECETAS.forEach(x=>{const f=RECETAS_FULL[x.c]||{};if(x.c!==r.c&&String(f.masa_base||'').includes(r.c))lista.push({n:cap(String(x.n).split(/[—(·]/)[0].trim()),q:null});});
+  return lista;
+}
+function sufijoPieza(n,usados){
+  const w=norm(n).replace(/[^a-z ]/g,' ').split(' ').filter(x=>x.length>2&&!VACIAS.includes(x));
+  let s=((w[0]||'pie').slice(0,3)).toUpperCase(),t=s,i=2; while(usados.has(t))t=s+(i++); usados.add(t); return t;
+}
+function piezasHTML(){return '<div id="pzWrap" style="display:none"><label>Piezas que salen de esta masa (cada una con su lote)</label><div id="pzLista"></div>'
+  +'<button type="button" id="pzAdd" class="btn s" style="margin-top:4px;padding:9px;font-size:13px">＋ Añadir pieza</button>'
+  +'<div style="font-size:10.5px;color:var(--gris);margin:4px 0 12px">Con piezas, cada una entra en el stock por separado y no hace falta «¿Cuánto ha salido?».</div></div>';}
+let pzEstado=[];
+async function ligarPiezas(r){
+  await cargarCfgPiezas(); if(!llevaPiezas(r))return;
+  const wrap=$('#pzWrap'); if(!wrap)return; wrap.style.display='block';
+  const mult=()=>parseFloat(($('#pmult')||{}).value)||1;
+  pzEstado=piezasPorDefecto(r).map(p=>({n:p.n,base:p.q,q:p.q!=null?Math.round(p.q*mult()):'',tocado:false}));
+  const pintarPz=()=>{
+    $('#pzLista').innerHTML=pzEstado.map((p,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px">
+      <input data-pzn="${i}" value="${escH(p.n)}" placeholder="Pieza (ej. Napolitana)" style="flex:1;padding:8px;font-size:13.5px">
+      <input data-pzq="${i}" type="number" min="0" inputmode="numeric" value="${p.q}" placeholder="nº" style="width:72px;padding:8px;font-size:13.5px">
+      <button type="button" data-pzx="${i}" class="del">🗑</button></div>`).join('');
+    $('#pzLista').querySelectorAll('[data-pzn]').forEach(e=>e.oninput=()=>{pzEstado[+e.dataset.pzn].n=e.value;});
+    $('#pzLista').querySelectorAll('[data-pzq]').forEach(e=>e.oninput=()=>{const p=pzEstado[+e.dataset.pzq];p.q=e.value;p.tocado=true;});
+    $('#pzLista').querySelectorAll('[data-pzx]').forEach(e=>e.onclick=()=>{pzEstado.splice(+e.dataset.pzx,1);pintarPz();});
+  };
+  pintarPz();
+  $('#pzAdd').onclick=()=>{pzEstado.push({n:'',base:null,q:'',tocado:true});pintarPz();};
+  const pm=$('#pmult'); if(pm)pm.addEventListener('input',()=>{pzEstado.forEach(p=>{if(!p.tocado&&p.base!=null)p.q=Math.round(p.base*mult());});pintarPz();});
+}
+function leerPiezas(){return ($('#pzWrap')&&$('#pzWrap').style.display!=='none')?pzEstado.filter(p=>String(p.n).trim()&&parseFloat(p.q)>0).map(p=>({n:String(p.n).trim(),q:parseFloat(p.q)})):[];}
+// Yemas de huevo entero (no pasteurizadas): la receta pide gramos de yema y se descuentan huevos
+// Preparaciones que se hacen dentro de la misma receta (ej. LEAVEN PASTOSO del croissant):
+// la fila de la masa se queda con su cantidad pero no se descuenta del stock, porque sus ingredientes ya se descuentan arriba
+function marcarInternos(){
+  RECETAS.forEach(r=>{
+    const cabeza=n=>String(n).split(/[—–:(]/)[0].trim(), esMay=n=>/[A-ZÁÉÍÓÚÑ]{3}/.test(cabeza(n))&&cabeza(n)===cabeza(n).toUpperCase();
+    const cab=new Set(r.i.filter(i=>!i.q&&esMay(i.n)).map(i=>claveBase(cabeza(i.n))).filter(Boolean));
+    r.i=r.i.map(i=>{
+      if(i.q||esMay(i.n)||!claveBase(i.n)||!cab.has(claveBase(i.n)))return i;
+      const m=String(i.o||'').match(/\d[\d.,]*/);
+      return {...i,q:m?cantNum(m[0]):null,u:/kg/i.test(i.o)?'kg':'gr',interno:true};
+    });
+  });
+}
+function ajustarYemas(){
+  const YEMA={'PB-OBR-DUL-025':18};   // croissant · 1 huevo entero = 18 gr de yema
+  RECETAS.forEach(r=>{const g=YEMA[r.c]; if(!g)return;
+    r.i=r.i.map(i=>{if(!i.q||!/yema/i.test(i.n)||!/^(g|gr|grs|gramos|kg)$/i.test(String(i.u).trim()))return i;
+      const gr=aBase(i.q,i.u); return {...i,n:'Huevo (por las yemas)',q:Math.round(gr/g*100)/100,u:'ud',o:'Yemas de huevo entero, no pasteurizadas · 1 huevo = '+g+' gr de yema'};});});
+}
 async function confirmarProd(r){
   const btn=$('#pOk'); if(btn&&btn.disabled)return;
   const mult=parseFloat($('#pmult').value)||1;
@@ -1037,7 +1111,7 @@ async function confirmarProd(r){
   await cargarPesos();
   for(const [idx,ing] of r.i.entries()){
     if(!ing.q)continue;
-    if(SIN_STOCK[keyDe(ing.n)])continue;
+    if(ing.interno||SIN_STOCK[keyDe(ing.n)])continue;
     const k=keyDe(ing.n);
     for(const {l,usar} of planLotes(k,comparable(ing.q*mult,ing.u,k),prodLote[idx])){
       const usarEnUnidadLote=deComparable(usar,l,k);
@@ -1048,7 +1122,20 @@ async function confirmarProd(r){
     }
   }
   // lo producido entra en el stock, con su lote y su caducidad
-  let avisoStock='';
+  // piezas: cada una su lote hijo y su existencia en el stock
+  const piezas=leerPiezas(); let avisoStock=''; const lotesPz=[];
+  if(piezas.length){
+    const usados=new Set(); const d=diasVida(r.c), cad=d?ymd(new Date(Date.now()+d*86400000)):null;
+    for(const p of piezas){
+      const lp=loteFinal+'-'+sufijoPieza(p.n,usados); lotesPz.push(lp+' ('+p.q+')');
+      await sb.from('inv_producciones').insert({receta_cod:r.c,receta_nombre:r.n+' · '+p.n+' ('+p.q+' ud)',lote_final:lp,multiplicador:mult,fecha:hoy(),persona});
+      if(!materias.some(m=>keyDe(m.nombre)===keyDe(p.n)))await sb.from('inv_materias').insert({nombre:p.n,unidad:'ud',proveedor:'Obrador',stock_min:0});
+      const {error:e3}=await sb.from('inv_lotes').insert({materia:p.n,lote:lp,cantidad_inicial:p.q,cantidad_actual:p.q,unidad:'ud',caducidad:cad,fecha_entrada:hoy(),agotado:false});
+      if(e3)avisoStock=' · ojo: no se pudo crear la existencia de '+p.n;
+    }
+    try{await guardarCfgPiezas(r.c,piezas,mult);}catch(e){}
+    avisoStock=' · piezas: '+lotesPz.join(', ')+avisoStock;
+  }else{
   const salida=numEs(($('#psale')||{}).value||0);
   if(salida>0){
     const uSal=(($('#psaleu')||{}).value)||'gr';
@@ -1064,6 +1151,7 @@ async function confirmarProd(r){
     }catch(err){avisoStock=' · ojo: no se pudo crear la existencia';}
   }else{
     avisoStock=' · sin existencias (no pusiste cuánto salió)';
+  }
   }
   $('#modal').classList.remove('show');
   await cargar();toast('Producción registrada · lote '+loteFinal+' ✓'+avisoStock);
@@ -1148,10 +1236,13 @@ async function buscarTraza(){
   if(!prods||!prods.length){cont.innerHTML='<div class="empty">No se encontró ese lote.</div>';return;}
   let h='';
   for(const p of prods){
-    const {data:cons}=await sb.from('inv_consumos').select('*').eq('produccion_id',p.id);
+    let {data:cons}=await sb.from('inv_consumos').select('*').eq('produccion_id',p.id); let padre='';
+    if((!cons||!cons.length)&&/-[A-Z]{3}\d*$/.test(p.lote_final)){const lp=p.lote_final.replace(/-[A-Z]{3}\d*$/,'');
+      const {data:pp}=await sb.from('inv_producciones').select('id').eq('lote_final',lp).limit(1);
+      if(pp&&pp[0]){padre=lp;cons=(await sb.from('inv_consumos').select('*').eq('produccion_id',pp[0].id)).data;}}
     h+=`<div class="traza"><b>${p.receta_nombre}</b> · lote <b>${p.lote_final}</b><br>
       <span style="font-size:11.5px;color:var(--gris)">${p.fecha} · ×${p.multiplicador} · por ${p.persona||'—'}</span>
-      <div style="margin-top:8px;font-size:12.5px">Materias primas usadas:</div>`;
+      <div style="margin-top:8px;font-size:12.5px">Materias primas usadas${padre?' (de la masa, lote <b>'+padre+'</b>)':''}:</div>`;
     if(cons&&cons.length){
       cons.forEach(c=>{h+=`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid #eadfce">
         • ${c.materia} — lote <b>${c.lote_texto||'s/lote'}</b> — ${nEs(Math.round(c.cantidad*100)/100)} ${c.unidad||''}</div>`;});
