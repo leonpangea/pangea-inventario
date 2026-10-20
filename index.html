@@ -161,7 +161,7 @@ function aplicarFilas(data){
       i:(x.ingredientes||[]).map(r=>Array.isArray(r)?{n:String(r[0]||''),q:cantNum(r[1]),u:String(r[2]||''),o:r[3]||''}:{n:r.n,q:cantNum(r.q),u:r.u||''})
         .map(i=>NO_INGREDIENTE.includes(claveBase(i.n))||/^(total|rendimiento|rinde)\b/i.test(i.n.trim())?{...i,q:null}:i)}));
   RECETAS=RECETAS_ALL.filter(r=>/^PB-OBR-/.test(r.c));
-  ajustarYemas(); marcarInternos();
+  ajustarYemas(); zumoALimon(); marcarInternos();
   RECETAS_FULL={}; data.forEach(x=>RECETAS_FULL[x.codigo]=x);
 }
 async function cargarRecetas(forzar){
@@ -1093,6 +1093,17 @@ function marcarInternos(){
       return {...i,q:m?cantNum(m[0]):null,u:/kg/i.test(i.o)?'kg':'gr',interno:true};
     });
   });
+}
+// Zumo de limón: en el obrador se exprimen limones, no se compra zumo.
+// Datos de la casa (fichas SAL-006 y DUL-058): 1 limón ≈ 130 gr y da ~30 ml de zumo → se descuentan limones en kg
+const ZUMO_POR_LIMON=30, PESO_LIMON=130;
+function zumoALimon(){
+  RECETAS.forEach(r=>r.i=r.i.map(i=>{
+    if(!i.q||!/zumo\s+de\s+lim[oó]n/i.test(i.n)||!/^(ml|l|litros?|g|gr|grs|gramos|kg)$/i.test(String(i.u).trim()))return i;
+    const ml=aBase(i.q,i.u), nLim=ml/ZUMO_POR_LIMON;
+    return {...i,n:'Limón (para zumo)',q:Math.round(nLim*PESO_LIMON),u:'gr',
+      o:'Zumo: '+nEs(Math.round(ml))+' ml ≈ '+nEs(Math.round(nLim*10)/10)+' limones · 1 limón (~'+PESO_LIMON+' gr) da ~'+ZUMO_POR_LIMON+' ml · '+(i.o||'')};
+  }));
 }
 function ajustarYemas(){
   const YEMA={'PB-OBR-DUL-025':18};   // croissant · 1 huevo entero = 18 gr de yema
