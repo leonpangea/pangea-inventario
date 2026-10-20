@@ -1096,8 +1096,8 @@ function marcarInternos(){
 }
 // Zumo de limón: en el obrador se exprimen limones, no se compra zumo.
 // Datos de la casa (fichas SAL-006 y DUL-058): 1 limón ≈ 130 gr y da ~30 ml de zumo → se descuentan limones en kg
-const ZUMO_POR_LIMON=30, PESO_LIMON=130;
 function zumoALimon(){
+  const ZUMO_POR_LIMON=30, PESO_LIMON=130;   // dentro de la función: se llama antes de que el script termine de cargar
   RECETAS.forEach(r=>r.i=r.i.map(i=>{
     if(!i.q||!/zumo\s+de\s+lim[oó]n/i.test(i.n)||!/^(ml|l|litros?|g|gr|grs|gramos|kg)$/i.test(String(i.u).trim()))return i;
     const ml=aBase(i.q,i.u), nLim=ml/ZUMO_POR_LIMON;
