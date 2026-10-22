@@ -799,12 +799,12 @@ function renderEnvios(){
     h+='<h3 class="sec">Últimos envíos</h3><div class="card">';
     envHist.slice(0,12).forEach(e=>{
       const n=(e.lineas||[]).length;
-      h+='<div class="prodrow" data-envver="'+escH(e.id)+'"><div class="t">'+escH(e.destino)+' · '+escH(e.fecha)+'</div>'
+      h+='<div class="prodrow" data-envver="'+escH(e.id)+'"><div class="t">'+escH(e.destino)+' · '+escH(fechaEs(e.fecha))+' · '+escH(numAlbaran(e.id))+'</div>'
        +'<div class="s">'+n+' producto'+(n===1?'':'s')+(e.persona?' · '+escH(e.persona):'')+'</div></div>';
       if(envAbierto===e.id){
         h+='<div style="padding:2px 12px 12px;font-size:11.5px;color:var(--gris)">';
         (e.lineas||[]).forEach(l=>{h+='• '+escH(l.n)+': '+escH(String(l.q))+' '+escH(l.u)+(l.lotes&&l.lotes.length?' — lote '+escH(l.lotes.map(x=>x.lote||'s/lote').join(' + ')):'')+'<br>';});
-        h+='</div>';
+        h+='<button class="btn s" data-envalb="'+escH(e.id)+'" style="margin-top:8px;padding:9px;font-size:13px">🖨 Albarán '+escH(numAlbaran(e.id))+'</button></div>';
       }
     });
     h+='</div>';
@@ -825,6 +825,7 @@ function renderEnvios(){
     envLineas[i].q=parseFloat(String(inp.value).replace(',','.'))||0;
     if(!antes!==!envLineas[i].q){const p=inp.selectionStart;renderEnvios();const n=$('[data-envq="'+i+'"]');if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}}
   });
+  document.querySelectorAll('[data-envalb]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const e=envHist.find(x=>x.id===b.dataset.envalb);if(e)verAlbaran(e);});
   document.querySelectorAll('[data-envver]').forEach(b=>b.onclick=()=>{
     envAbierto = envAbierto===b.dataset.envver ? null : b.dataset.envver; renderEnvios();
   });
@@ -846,7 +847,7 @@ async function confirmarEnvio(){
       const enUnidad=deComparable(p.usar,p.l,l.k);
       const nuevo=Number(p.l.cantidad_actual)-enUnidad;
       await sb.from('inv_lotes').update({cantidad_actual:nuevo,agotado:nuevo<=0.0001}).eq('id',p.l.id);
-      usados.push({lote_id:p.l.id,lote:p.l.lote||'',cantidad:Math.round(enUnidad*100)/100,unidad:p.l.unidad});
+      usados.push({lote_id:p.l.id,lote:p.l.lote||'',caducidad:p.l.caducidad||null,cantidad:Math.round(enUnidad*100)/100,unidad:p.l.unidad});
       servido+=p.usar;
     }
     if(servido<need.v-0.0001)incompleto.push(l.n);
@@ -858,6 +859,50 @@ async function confirmarEnvio(){
               : 'Envío a '+envDest+' registrado ✓'+(incompleto.length?' · faltaba stock de: '+incompleto.join(', '):''));
   envLineas=[]; envQ=''; envCargado=false;
   await cargar(); await cargarEnvios(); renderEnvios();
+  if(!error)verAlbaran(Object.assign({id},envio));
+}
+// ---------- ALBARÁN DE ENVÍO (para imprimir y que viaje con la mercancía) ----------
+function numAlbaran(id){const m=String(id).match(/envio_(\d{4})-(\d{2})-(\d{2})_(\d+)/);return m?'ALB-'+m[1].slice(2)+m[2]+m[3]+'-'+m[4]:String(id);}
+const fechaEs=f=>f?String(f).slice(8,10)+'/'+String(f).slice(5,7)+'/'+String(f).slice(0,4):'';
+function albaranHTML(e){
+  const filas=(e.lineas||[]).map((l,i)=>{
+    const ls=(l.lotes&&l.lotes.length)?l.lotes:[{lote:'',caducidad:null}];
+    return ls.map((x,j)=>'<tr>'+(j===0?'<td rowspan="'+ls.length+'" class="c">'+(i+1)+'</td><td rowspan="'+ls.length+'"><b>'+escH(l.n)+'</b></td><td rowspan="'+ls.length+'" class="c"><b>'+escH(nEs(l.q))+' '+escH(l.u)+'</b></td>':'')
+      +'<td class="c">'+escH(x.lote||'s/lote')+(ls.length>1?' <span class="g">('+escH(nEs(x.cantidad))+' '+escH(x.unidad||'')+')</span>':'')+'</td><td class="c">'+escH(fechaEs(x.caducidad)||'—')+'</td><td class="c chk">☐</td></tr>').join('');
+  }).join('');
+  return '<div class="alb"><table class="cab"><tr><td class="logo"><div class="t1">PANGEA BRUNCH</div><div class="t2">Obrador · Albarán de envío</div></td>'
+    +'<td><div class="k">Nº albarán</div><div class="v">'+escH(numAlbaran(e.id))+'</div><div class="k">Fecha</div><div class="v">'+escH(fechaEs(e.fecha))+'</div></td>'
+    +'<td><div class="k">Origen</div><div class="v">Obrador</div><div class="k">Destino</div><div class="v">Pangea '+escH(e.destino)+'</div></td></tr></table>'
+    +'<table class="lin"><tr><th>#</th><th>Producto</th><th>Cantidad</th><th>Lote</th><th>Caducidad</th><th>Recibido</th></tr>'+filas+'</table>'
+    +'<div class="tot">'+(e.lineas||[]).length+' producto'+((e.lineas||[]).length===1?'':'s')+(e.persona?' · Preparado por: '+escH(e.persona):'')+'</div>'
+    +'<table class="firmas"><tr><td>Entrega (obrador)<br><br>Nombre y firma:<div class="ln"></div></td><td>Recibe ('+escH(e.destino)+')<br><br>Nombre, firma y fecha:<div class="ln"></div></td></tr></table>'
+    +'<div class="obs">Observaciones / incidencias en la recepción:<div class="ln"></div><div class="ln"></div></div></div>';
+}
+const ALB_CSS='body{font-family:Arial,sans-serif;color:#1a1a1a;margin:0}.alb{max-width:760px;margin:0 auto;padding:18px;font-size:12px;font-family:Arial,sans-serif;color:#1a1a1a}'
+  +'.alb table{border-collapse:collapse;width:100%}.alb .cab td{border:1px solid #D4B896;padding:8px 10px;vertical-align:top}.alb .cab .logo{background:#1A3A1C;color:#fff;width:34%}'
+  +'.alb .t1{font-size:19px;font-weight:800;letter-spacing:.5px}.alb .t2{color:#F4A261;font-size:11px;margin-top:3px}.alb .k{font-size:9.5px;color:#6B6B6B;text-transform:uppercase;margin-top:2px}.alb .v{font-size:13px;font-weight:700;margin-bottom:4px}'
+  +'.alb .lin{margin-top:14px}.alb .lin th{background:#1A3A1C;color:#fff;font-size:10.5px;padding:6px;border:1px solid #1A3A1C}.alb .lin td{border:1px solid #D4B896;padding:6px 7px}.alb .lin tr:nth-child(odd) td{background:#FDF3E7}'
+  +'.alb .c{text-align:center}.alb .g{color:#6B6B6B;font-size:10px}.alb .chk{font-size:15px}.alb .tot{margin:8px 2px;font-size:11px;color:#6B6B6B}'
+  +'.alb .firmas{margin-top:22px}.alb .firmas td{width:50%;padding:8px 12px 4px 0;font-size:11px;vertical-align:top}.alb .ln{border-bottom:1px solid #999;height:26px}.alb .obs{margin-top:16px;font-size:11px}'
+  +'@media print{@page{size:A4;margin:12mm}.alb{padding:0}}';
+async function verAlbaran(e){
+  // envíos antiguos: la caducidad no se guardaba, se busca por el id del lote
+  const faltan=[...new Set((e.lineas||[]).flatMap(l=>(l.lotes||[]).filter(x=>x.caducidad===undefined&&x.lote_id).map(x=>x.lote_id)))];
+  if(faltan.length){try{const {data}=await sb.from('inv_lotes').select('id,caducidad').in('id',faltan);
+    const m=new Map((data||[]).map(x=>[x.id,x.caducidad]));(e.lineas||[]).forEach(l=>(l.lotes||[]).forEach(x=>{if(x.caducidad===undefined)x.caducidad=m.get(x.lote_id)||null;}));}catch(err){}}
+  $('#sheet').innerHTML='<style>'+ALB_CSS.replace(/body\{[^}]*\}/,'')+'</style>'+albaranHTML(e)
+    +'<div class="mbtns"><button class="cancel" id="aCerrar">Cerrar</button><button class="ok" id="aPrint">🖨 Imprimir albarán</button></div>';
+  $('#modal').classList.add('show');
+  $('#aCerrar').onclick=()=>$('#modal').classList.remove('show');
+  $('#aPrint').onclick=()=>imprimirAlbaran(e);
+}
+function imprimirAlbaran(e){
+  const doc='<!doctype html><html><head><meta charset="utf-8"><title>'+escH(numAlbaran(e.id))+' · '+escH(e.destino)+'</title><style>'+ALB_CSS+'</style></head><body>'+albaranHTML(e)+'</body></html>';
+  let f=document.getElementById('albFrame'); if(f)f.remove();
+  f=document.createElement('iframe'); f.id='albFrame'; f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  document.body.appendChild(f);
+  const d=f.contentWindow.document; d.open(); d.write(doc); d.close();
+  setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(err){const w=window.open('','_blank');if(w){w.document.write(doc);w.document.close();w.focus();w.print();}}},250);
 }
 
 // ---------- LO PRODUCIDO ENTRA EN EL STOCK ----------
