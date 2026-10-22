@@ -732,6 +732,16 @@ function deComparable(v,l,k){ // de gramos/ud a la unidad del lote
 // (igual que una producción) y queda guardado en Supabase (tmp_archivos · envio_…).
 const LOCALES=['León','A Coruña'];
 let envDest=LOCALES[0], envLineas=[], envQ='', envHist=[], envAbierto=null, envCargado=false;
+// líneas «a mano»: cosas que no están en el stock (no descuentan nada, solo van al albarán)
+let envMan={n:'',q:'',u:'ud',lote:''};
+const UDS_MANO=['ud','kg','gr','l','ml','caja','bandeja','bolsa','bote','garrafa'];
+function formManoHTML(pre,v){return '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+  +'<input id="'+pre+'n" placeholder="Producto (ej. Servilletas)" value="'+escH(v.n)+'" style="flex:1 1 100%;margin:0">'
+  +'<input id="'+pre+'q" type="number" step="0.01" min="0" inputmode="decimal" placeholder="cantidad" value="'+escH(v.q)+'" style="flex:1;margin:0">'
+  +'<select id="'+pre+'u" style="width:96px;margin:0">'+UDS_MANO.map(u=>'<option'+(u===v.u?' selected':'')+'>'+u+'</option>').join('')+'</select>'
+  +'<input id="'+pre+'l" placeholder="Lote (opcional)" value="'+escH(v.lote)+'" style="flex:1 1 100%;margin:0">'
+  +'<button type="button" class="btn s" id="'+pre+'add" style="flex:1 1 100%;margin:0;padding:9px;font-size:13px">＋ Añadir al albarán</button></div>';}
+function leerMano(pre){const g=id=>($('#'+pre+id)||{}).value||'';return {n:g('n').trim(),q:parseFloat(String(g('q')).replace(',','.'))||0,u:g('u')||'ud',lote:g('l').trim()};}
 
 async function cargarEnvios(){
   try{
@@ -774,6 +784,8 @@ function renderEnvios(){
   h+='<h3 class="sec">Lo que se envía'+(envLineas.length?' · '+envLineas.length:'')+'</h3><div class="card">';
   if(!envLineas.length)h+='<div class="empty" style="padding:16px">Busca abajo y toca lo que vaya en el envío.</div>';
   envLineas.forEach((l,i)=>{
+    if(l.manual){h+='<div class="lote-item"><div class="top"><span>'+escH(l.n)+' — <b>'+escH(nEs(l.q))+' '+escH(l.u)+'</b></span><button class="del" data-envdel="'+i+'">🗑</button></div>'
+      +'<div style="font-size:10.5px;color:var(--gris)">a mano · no descuenta stock'+(l.lote?' · lote '+escH(l.lote):'')+'</div></div>';return;}
     const s=stockGrupo(l.k), hayTxt=fmtCant(s.base,s.fam);
     const need=comparable(l.q||0,l.u,l.k);
     const hay=ordenLotes(l.k).filter(x=>comparable(Number(x.cantidad_actual),x.unidad,l.k).f===need.f)
@@ -788,6 +800,8 @@ function renderEnvios(){
       +'<div style="font-size:10.5px;margin-top:4px;color:'+(falta?'var(--rojo)':'var(--gris)')+'">en stock: '+escH(hayTxt)+(falta?' — no llega':'')+'</div></div>';
   });
   h+='</div>';
+  h+='<details style="margin:8px 0"'+(envMan.n||envMan.q?' open':'')+'><summary style="font-size:13px;font-weight:700;color:var(--verde2);cursor:pointer;padding:6px 2px">＋ Añadir a mano algo que no está en el stock</summary>'
+    +'<div class="card" style="padding:10px">'+formManoHTML('em',envMan)+'<div style="font-size:10.5px;color:var(--gris);margin-top:6px">Sale en el albarán, pero no descuenta nada del stock.</div></div></details>';
   if(envLineas.some(l=>l.q>0))
     h+='<button class="btn" id="envOk" style="margin:10px 0">Registrar envío a '+escH(envDest)+'</button>';
   h+='<h3 class="sec">Añadir del stock</h3><input id="envsearch" placeholder="Buscar producto…" value="'+escH(envQ)+'">';
@@ -832,6 +846,10 @@ function renderEnvios(){
   const s=$('#envsearch');
   if(s)s.oninput=e=>{envQ=e.target.value;const p=e.target.selectionStart;renderEnvios();$('#envsearch').focus();$('#envsearch').setSelectionRange(p,p);};
   const ok=$('#envOk'); if(ok)ok.onclick=confirmarEnvio;
+  ['n','q','u','l'].forEach(id=>{const el=$('#em'+id); if(el)el.oninput=el.onchange=()=>{const v=leerMano('em');envMan={n:$('#emn').value,q:$('#emq').value,u:v.u,lote:$('#eml').value};};});
+  const ad=$('#emadd'); if(ad)ad.onclick=()=>{const v=leerMano('em');
+    if(!v.n){toast('Escribe qué es');return;} if(!(v.q>0)){toast('Pon la cantidad');return;}
+    envLineas.push({manual:true,k:'mano:'+Date.now(),n:v.n,q:v.q,u:v.u,lote:v.lote}); envMan={n:'',q:'',u:v.u,lote:''}; renderEnvios();};
 }
 async function confirmarEnvio(){
   const btn=$('#envOk'); if(btn&&btn.disabled)return;
@@ -841,6 +859,7 @@ async function confirmarEnvio(){
   const id=await siguienteEnvio();
   const guardadas=[], incompleto=[];
   for(const l of lineas){
+    if(l.manual){guardadas.push({n:l.n,q:l.q,u:l.u,manual:true,lotes:l.lote?[{lote:l.lote,caducidad:null}]:[]});continue;}
     const need=comparable(l.q,l.u,l.k);
     const usados=[]; let servido=0;
     for(const p of planLotes(l.k,need)){
@@ -866,8 +885,8 @@ function numAlbaran(id){const m=String(id).match(/envio_(\d{4})-(\d{2})-(\d{2})_
 const fechaEs=f=>f?String(f).slice(8,10)+'/'+String(f).slice(5,7)+'/'+String(f).slice(0,4):'';
 function albaranHTML(e){
   const filas=(e.lineas||[]).map((l,i)=>{
-    const ls=(l.lotes&&l.lotes.length)?l.lotes:[{lote:'',caducidad:null}];
-    return ls.map((x,j)=>'<tr>'+(j===0?'<td rowspan="'+ls.length+'" class="c">'+(i+1)+'</td><td rowspan="'+ls.length+'"><b>'+escH(l.n)+'</b></td><td rowspan="'+ls.length+'" class="c"><b>'+escH(nEs(l.q))+' '+escH(l.u)+'</b></td>':'')
+    const ls=(l.lotes&&l.lotes.length)?l.lotes:[{lote:l.manual?'—':'',caducidad:null}];
+    return ls.map((x,j)=>'<tr>'+(j===0?'<td rowspan="'+ls.length+'" class="c">'+(i+1)+'</td><td rowspan="'+ls.length+'"><b>'+escH(l.n)+'</b>'+(l.manual?' <span class="g">· a mano</span>':'')+'</td><td rowspan="'+ls.length+'" class="c"><b>'+escH(nEs(l.q))+' '+escH(l.u)+'</b></td>':'')
       +'<td class="c">'+escH(x.lote||'s/lote')+(ls.length>1?' <span class="g">('+escH(nEs(x.cantidad))+' '+escH(x.unidad||'')+')</span>':'')+'</td><td class="c">'+escH(fechaEs(x.caducidad)||'—')+'</td><td class="c chk">☐</td></tr>').join('');
   }).join('');
   return '<div class="alb"><table class="cab"><tr><td class="logo"><div class="t1">PANGEA BRUNCH</div><div class="t2">Obrador · Albarán de envío</div></td>'
@@ -891,8 +910,16 @@ async function verAlbaran(e){
   if(faltan.length){try{const {data}=await sb.from('inv_lotes').select('id,caducidad').in('id',faltan);
     const m=new Map((data||[]).map(x=>[x.id,x.caducidad]));(e.lineas||[]).forEach(l=>(l.lotes||[]).forEach(x=>{if(x.caducidad===undefined)x.caducidad=m.get(x.lote_id)||null;}));}catch(err){}}
   $('#sheet').innerHTML='<style>'+ALB_CSS.replace(/body\{[^}]*\}/,'')+'</style>'+albaranHTML(e)
+    +'<details style="margin:10px 0"><summary style="font-size:13px;font-weight:700;color:var(--verde2);cursor:pointer;padding:6px 2px">＋ Añadir a mano algo más a este albarán</summary>'
+    +'<div style="padding:8px 0">'+formManoHTML('am',{n:'',q:'',u:'ud',lote:''})+'</div></details>'
     +'<div class="mbtns"><button class="cancel" id="aCerrar">Cerrar</button><button class="ok" id="aPrint">🖨 Imprimir albarán</button></div>';
   $('#modal').classList.add('show');
+  $('#amadd').onclick=async()=>{const v=leerMano('am');
+    if(!v.n){toast('Escribe qué es');return;} if(!(v.q>0)){toast('Pon la cantidad');return;}
+    e.lineas=(e.lineas||[]).concat([{n:v.n,q:v.q,u:v.u,manual:true,lotes:v.lote?[{lote:v.lote,caducidad:null}]:[]}]);
+    const {id,...resto}=e; const {error}=await sb.from('tmp_archivos').update({contenido:JSON.stringify(resto)}).eq('id',id);
+    if(error){toast('No se pudo guardar: '+error.message);return;}
+    toast('Añadido al albarán ✓'); envCargado=false; await cargarEnvios(); if(tab==='env')renderEnvios(); verAlbaran(e);};
   $('#aCerrar').onclick=()=>$('#modal').classList.remove('show');
   $('#aPrint').onclick=()=>imprimirAlbaran(e);
 }
