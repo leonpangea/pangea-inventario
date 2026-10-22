@@ -240,7 +240,7 @@ function palabras(n){
   return w;
 }
 const ordenar=w=>w.slice().sort().join(' ');
-const SINONIMOS_TXT={'limon pekin':'limon','limon pepkin':'limon','limones pekin':'limon','impulsor norte':'polvo de hornear','impulsor':'polvo de hornear','maicena':'maizena','almidon de maiz':'maizena','yema de huevo':'yema','yemas de huevo':'yema',
+const SINONIMOS_TXT={'naranja mac':'naranja','cascara de naranja':'naranja','cascaras de naranja':'naranja','limon pekin':'limon','limon pepkin':'limon','limones pekin':'limon','impulsor norte':'polvo de hornear','impulsor':'polvo de hornear','maicena':'maizena','almidon de maiz':'maizena','yema de huevo':'yema','yemas de huevo':'yema',
   'azucar impalpable':'azucar glass','azucar glas':'azucar glass','mantequilla 84%':'mantequilla laminar 84%',
   'mantequilla francesa':'mantequilla','vainilla':'pasta de vainilla','extracto de vainilla':'esencia de vainilla','sirope de arce':'jarabe de arce','la lechera':'leche condensada','lechera':'leche condensada','psilio':'psyllium','psilio rubio':'psyllium','semillas de cilantro':'cilantro molido','sal fina':'sal','sal marina':'sal','sal maldon':'sal en escamas','praline de avellana':'praline','praline avellana':'praline','te matcha':'te verde matcha','matcha':'te verde matcha','te matcha en polvo':'te verde matcha','matcha en polvo':'te verde matcha','leche de vaca':'leche'};
 const SINONIMOS={}; Object.entries(SINONIMOS_TXT).forEach(([a,b])=>SINONIMOS[ordenar(palabras(a))]=ordenar(palabras(b)));
@@ -691,7 +691,8 @@ function renderProducirLista(){
 // Para que "4 barquetas de tomillo" y "160 gr de tomillo" se puedan restar entre sí.
 // Se guarda en Supabase (tmp_archivos · cfg_peso_ud) y lo comparten todos los móviles.
 let PESO_UD={}, pesoCargado=false;
-const PESO_UD_FIJO={'tomillo fresco':40,'salvia fresca':40};   // 1 barqueta = 40 gr (Fran)
+const PESO_UD_FIJO={'tomillo fresco':40,'salvia fresca':40,   // 1 barqueta = 40 gr (Fran)
+  'naranja':173};   // 1 naranja ≈ 173 gr (ficha del financier: 2 naranjas = 346 gr)
 function pesoDesdeRecetas(){
   const p={};
   RECETAS.forEach(r=>r.i.forEach(i=>{if(!i.q)return;const k=keyDe(i.n),o=String(i.o||'');
