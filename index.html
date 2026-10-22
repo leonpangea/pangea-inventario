@@ -981,8 +981,8 @@ const nombreProducto=r=>{const n=String(r.n||'').trim();return n.charAt(0).toUpp
 const VARIANTES={
   'PB-OBR-DUL-034':{titulo:'Variedad',base:'harina de almendra',
     opciones:{'Almendra':{ing:'harina de almendra',nombre:'FRANGIPÁN DE ALMENDRA'},
-              'Pistacho':{ing:'pistacho',nombre:'FRANGIPÁN DE PISTACHO',obs:'Pistacho molido'},
-              'Avellana':{ing:'avellana',nombre:'FRANGIPÁN DE AVELLANA',obs:'Avellana molida'}}}
+              'Pistacho':{ing:'pistacho',nombre:'FRANGIPÁN DE PISTACHO',obs:'Pistacho entero, se muele en el obrador'},
+              'Avellana':{ing:'avellana',nombre:'FRANGIPÁN DE AVELLANA',obs:'Avellana entera, se muele en el obrador'}}}
 };
 function conVariante(r,elegida){
   const v=VARIANTES[r.c]; if(!v)return r;
