@@ -240,7 +240,7 @@ function palabras(n){
   return w;
 }
 const ordenar=w=>w.slice().sort().join(' ');
-const SINONIMOS_TXT={'impulsor norte':'polvo de hornear','impulsor':'polvo de hornear','maicena':'maizena','almidon de maiz':'maizena','yema de huevo':'yema','yemas de huevo':'yema',
+const SINONIMOS_TXT={'limon pekin':'limon','limon pepkin':'limon','limones pekin':'limon','impulsor norte':'polvo de hornear','impulsor':'polvo de hornear','maicena':'maizena','almidon de maiz':'maizena','yema de huevo':'yema','yemas de huevo':'yema',
   'azucar impalpable':'azucar glass','azucar glas':'azucar glass','mantequilla 84%':'mantequilla laminar 84%',
   'mantequilla francesa':'mantequilla','vainilla':'pasta de vainilla','extracto de vainilla':'esencia de vainilla','sirope de arce':'jarabe de arce','la lechera':'leche condensada','lechera':'leche condensada','psilio':'psyllium','psilio rubio':'psyllium','semillas de cilantro':'cilantro molido','sal fina':'sal','sal marina':'sal','sal maldon':'sal en escamas','praline de avellana':'praline','praline avellana':'praline','te matcha':'te verde matcha','matcha':'te verde matcha','te matcha en polvo':'te verde matcha','matcha en polvo':'te verde matcha','leche de vaca':'leche'};
 const SINONIMOS={}; Object.entries(SINONIMOS_TXT).forEach(([a,b])=>SINONIMOS[ordenar(palabras(a))]=ordenar(palabras(b)));
@@ -1171,7 +1171,7 @@ function marcarInternos(){
 function zumoALimon(){
   const ZUMO_POR_LIMON=30, PESO_LIMON=130;   // dentro de la función: se llama antes de que el script termine de cargar
   RECETAS.forEach(r=>r.i=r.i.map(i=>{
-    if(!i.q||!/zumo\s+de\s+lim[oó]n/i.test(i.n)||!/^(ml|l|litros?|g|gr|grs|gramos|kg)$/i.test(String(i.u).trim()))return i;
+    if(!i.q||!/(zumo|jugo)\s+(de\s+)?lim[oó]n/i.test(i.n)||!/^(ml|l|litros?|g|gr|grs|gramos|kg)$/i.test(String(i.u).trim()))return i;
     const ml=aBase(i.q,i.u), nLim=ml/ZUMO_POR_LIMON;
     return {...i,n:'Limón (para zumo)',q:Math.round(nLim*PESO_LIMON),u:'gr',
       o:'Zumo: '+nEs(Math.round(ml))+' ml ≈ '+nEs(Math.round(nLim*10)/10)+' limones · 1 limón (~'+PESO_LIMON+' gr) da ~'+ZUMO_POR_LIMON+' ml · '+(i.o||'')};
