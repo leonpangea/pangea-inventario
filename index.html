@@ -1000,10 +1000,10 @@ function abrirProd(cod,varElegida){
   h+='<label>Nº de lote del producto final (lo pone la app)</label><input id="plote" readonly value="calculando…" style="background:#f3efe6;font-weight:800;letter-spacing:.5px">';
   const rend=rendimientoDe(cod), dv=diasVida(cod);
   h+='<label>¿Cuánto ha salido? (entra en el stock como '+escH(nombreProducto(r))+')</label>';
-  h+='<div style="display:flex;gap:7px"><input id="psale" type="number" step="0.01" min="0" inputmode="decimal" value="'+(rend.q||'')+'" placeholder="cantidad" style="flex:1">'
+  h+='<div style="display:flex;gap:7px"><input id="psale" type="number" step="0.01" min="0" inputmode="decimal" value="" placeholder="'+(rend.q?'ficha: '+escH(nEs(rend.q))+' (pon lo real)':'cantidad real')+'" style="flex:1;border-color:var(--naranja,#F4A261)">'
     +'<select id="psaleu" style="width:104px">'+UDS_SALIDA.map(u=>'<option'+(u===rend.u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>';
   h+='<div style="font-size:10.5px;color:var(--gris);margin:-6px 0 12px">Ficha: '+escH(((RECETAS_FULL[cod]||{}).rendimiento)||'sin rendimiento')
-    +(dv?' · caduca a los '+dv+' días':' · sin vida útil en la ficha')+'. Corrígelo si ha salido otra cosa.</div>';
+    +(dv?' · caduca a los '+dv+' días':' · sin vida útil en la ficha')+'. Pon lo que ha salido de verdad (contado o pesado).</div>';
   h+=piezasHTML();
   h+='<h3 style="font-size:13px;margin:14px 0 6px;color:var(--verde2)">Se descontará del stock:</h3>';
   h+='<div id="consumos"></div>';
@@ -1153,11 +1153,11 @@ async function ligarPiezas(r){
   await cargarCfgPiezas(); if(!llevaPiezas(r))return;
   const wrap=$('#pzWrap'); if(!wrap)return; wrap.style.display='block';
   const mult=()=>parseFloat(($('#pmult')||{}).value)||1;
-  pzEstado=piezasPorDefecto(r).map(p=>({n:p.n,base:p.q,q:p.q!=null?Math.round(p.q*mult()):'',tocado:false}));
+  pzEstado=piezasPorDefecto(r).map(p=>({n:p.n,base:p.q,q:'',tocado:true}));   // siempre se cuenta lo que ha salido
   const pintarPz=()=>{
     $('#pzLista').innerHTML=pzEstado.map((p,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px">
       <input data-pzn="${i}" value="${escH(p.n)}" placeholder="Pieza (ej. Napolitana)" style="flex:1;padding:8px;font-size:13.5px">
-      <input data-pzq="${i}" type="number" min="0" inputmode="numeric" value="${p.q}" placeholder="nº" style="width:72px;padding:8px;font-size:13.5px">
+      <input data-pzq="${i}" type="number" min="0" inputmode="numeric" value="${p.q}" placeholder="${p.base!=null?'~'+Math.round(p.base*mult()):'nº'}" style="width:72px;padding:8px;font-size:13.5px">
       <button type="button" data-pzx="${i}" class="del">🗑</button></div>`).join('');
     $('#pzLista').querySelectorAll('[data-pzn]').forEach(e=>e.oninput=()=>{pzEstado[+e.dataset.pzn].n=e.value;});
     $('#pzLista').querySelectorAll('[data-pzq]').forEach(e=>e.oninput=()=>{const p=pzEstado[+e.dataset.pzq];p.q=e.value;p.tocado=true;});
@@ -1203,6 +1203,9 @@ function ajustarYemas(){
 async function confirmarProd(r){
   const btn=$('#pOk'); if(btn&&btn.disabled)return;
   const mult=parseFloat($('#pmult').value)||1;
+  // siempre hay que decir lo que ha salido: o la cantidad, o las piezas
+  if(!(numEs(($('#psale')||{}).value||0)>0)&&!leerPiezas().length){
+    toast('Pon cuánto ha salido antes de confirmar'); const ps=$('#psale'); if(ps){ps.focus();ps.scrollIntoView({block:'center'});} return;}
   if(btn)btn.disabled=true;
   let loteFinal;
   try{loteFinal=await siguienteLote(r);}catch(e){toast('No se pudo calcular el lote: '+(e.message||e));if(btn)btn.disabled=false;return;}
