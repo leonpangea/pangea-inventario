@@ -985,6 +985,39 @@ const VARIANTES={
               'Pistacho':{ing:'pistacho',nombre:'FRANGIPÁN DE PISTACHO',obs:'Pistacho entero, se muele en el obrador'},
               'Avellana':{ing:'avellana',nombre:'FRANGIPÁN DE AVELLANA',obs:'Avellana entera, se muele en el obrador'}}}
 };
+// Doradura: hay dos (yemas y huevos). En las recetas que pintan con doradura se elige cuál se usa,
+// para que quede en la trazabilidad su lote (y, si se pone, lo que se gastó).
+const DORADURAS=[{n:'Yemas',mat:'Doradura a base de yemas'},{n:'Huevos',mat:'Doradura a base de huevos'},{n:'No lleva',mat:''}];
+let prodDor={i:0};
+function usaDoradura(cod){if(cod==='PB-OBR-DUL-005'||cod==='PB-OBR-DUL-082')return false;const f=RECETAS_FULL[cod]||{};return /doradura/i.test(JSON.stringify([f.ingredientes||[],f.pasos||[]]));}
+function doraduraHTML(){
+  const d=DORADURAS[prodDor.i]; let lt='';
+  if(d.mat){const ls=ordenLotes(keyDe(d.mat)); lt=ls.length?'Se anota el lote '+escH(ls[0].lote||'s/lote')+(ls[0].caducidad?' · cad '+fechaEs(ls[0].caducidad):''):'⚠ No hay '+escH(d.mat.toLowerCase())+' en el stock: producidla antes o se anota sin lote.';}
+  return '<label>Doradura que se usa</label><div style="display:flex;gap:6px;margin-bottom:6px">'
+    +DORADURAS.map((x,i)=>'<button type="button" class="pbtn pdor" data-i="'+i+'" style="flex:1;margin:0;'+(i===prodDor.i?'background:var(--verde2);color:#fff':'')+'">'+escH(x.n)+'</button>').join('')+'</div>'
+    +(d.mat?'<input id="pdorgr" type="number" min="0" step="1" inputmode="numeric" placeholder="gr usados (opcional, si lo pesáis se descuenta)" value="'+(prodDor.gr||'')+'">':'')
+    +'<div style="font-size:10.5px;color:'+(/⚠/.test(lt)?'var(--rojo)':'var(--gris)')+';margin:-6px 0 12px">'+lt+'</div>';
+}
+function ligarDoradura(){
+  document.querySelectorAll('.pdor').forEach(b=>b.onclick=()=>{prodDor={i:+b.dataset.i,gr:prodDor.gr};$('#pdorWrap').innerHTML=doraduraHTML();ligarDoradura();});
+  const g=$('#pdorgr'); if(g)g.oninput=()=>{prodDor.gr=g.value;};
+}
+async function anotarDoradura(cod,prodId){
+  if(!usaDoradura(cod))return '';
+  const d=DORADURAS[prodDor.i]; if(!d.mat)return '';
+  const k=keyDe(d.mat), gr=parseFloat(String(prodDor.gr||'').replace(',','.'))||0, ls=ordenLotes(k);
+  if(!ls.length)return ' · ojo: no había '+d.mat.toLowerCase()+' en stock';
+  if(gr>0){
+    for(const {l,usar} of planLotes(k,comparable(gr,'gr',k))){
+      const u=deComparable(usar,l,k), nuevo=Number(l.cantidad_actual)-u;
+      await sb.from('inv_lotes').update({cantidad_actual:nuevo,agotado:nuevo<=0.0001}).eq('id',l.id);
+      await sb.from('inv_consumos').insert({produccion_id:prodId,materia:l.materia,lote_id:l.id,lote_texto:l.lote||'',cantidad:u,unidad:l.unidad});
+    }
+  }else{
+    await sb.from('inv_consumos').insert({produccion_id:prodId,materia:ls[0].materia,lote_id:ls[0].id,lote_texto:ls[0].lote||'',cantidad:0,unidad:ls[0].unidad});
+  }
+  return ' · '+d.mat.toLowerCase()+' anotada';
+}
 function conVariante(r,elegida){
   const v=VARIANTES[r.c]; if(!v)return r;
   const op=v.opciones[elegida]||v.opciones[Object.keys(v.opciones)[0]];
@@ -1005,6 +1038,7 @@ function abrirProd(cod,varElegida){
   h+='<div style="font-size:10.5px;color:var(--gris);margin:-6px 0 12px">Ficha: '+escH(((RECETAS_FULL[cod]||{}).rendimiento)||'sin rendimiento')
     +(dv?' · caduca a los '+dv+' días':' · sin vida útil en la ficha')+'. Pon lo que ha salido de verdad (contado o pesado).</div>';
   h+=piezasHTML();
+  if(usaDoradura(cod)){prodDor={i:0};h+='<div id="pdorWrap">'+doraduraHTML()+'</div>';}
   h+='<h3 style="font-size:13px;margin:14px 0 6px;color:var(--verde2)">Se descontará del stock:</h3>';
   h+='<div id="consumos"></div>';
   h+='<div class="mbtns"><button class="cancel" id="pCancel">Cancelar</button><button class="ok" id="pOk">Confirmar producción</button></div>';
@@ -1077,6 +1111,7 @@ function abrirProd(cod,varElegida){
   siguienteLote(r).then(l=>{const i=$('#plote');if(i)i.value=l;}).catch(()=>{const i=$('#plote');if(i)i.value='(se asignará al confirmar)';});
   $('#pCancel').onclick=()=>$('#modal').classList.remove('show');
   $('#pOk').onclick=()=>confirmarProd(r);
+  if($('#pdorWrap'))ligarDoradura();
   document.querySelectorAll('.pvar').forEach(b=>b.onclick=()=>{const m=($('#pmult')||{}).value;abrirProd(cod,b.dataset.v);const pm=$('#pmult');if(pm&&m&&m!=='1'){pm.value=m;pm.dispatchEvent(new Event('input'));}});
 }
 // Orden de uso de los lotes de un ingrediente: primero el elegido (si lo hay), luego el que caduca antes,
@@ -1226,9 +1261,10 @@ async function confirmarProd(r){
         lote_texto:l.lote||'',cantidad:usarEnUnidadLote,unidad:l.unidad});
     }
   }
+  const avisoDor=await anotarDoradura(r.c,prod.id);
   // lo producido entra en el stock, con su lote y su caducidad
   // piezas: cada una su lote hijo y su existencia en el stock
-  const piezas=leerPiezas(); let avisoStock=''; const lotesPz=[];
+  const piezas=leerPiezas(); let avisoStock=avisoDor; const lotesPz=[];
   if(piezas.length){
     const usados=new Set(); const d=diasVida(r.c), cad=d?ymd(new Date(Date.now()+d*86400000)):null;
     for(const p of piezas){
@@ -1252,10 +1288,10 @@ async function confirmarProd(r){
       const cad=d?ymd(new Date(Date.now()+d*86400000)):null;
       const {error:e2}=await sb.from('inv_lotes').insert({materia:nomProd,lote:loteFinal,
         cantidad_inicial:salida,cantidad_actual:salida,unidad:uSal,caducidad:cad,fecha_entrada:hoy(),agotado:false});
-      if(e2)avisoStock=' · ojo: no se pudo crear la existencia ('+e2.message+')';
-    }catch(err){avisoStock=' · ojo: no se pudo crear la existencia';}
+      if(e2)avisoStock+=' · ojo: no se pudo crear la existencia ('+e2.message+')';
+    }catch(err){avisoStock+=' · ojo: no se pudo crear la existencia';}
   }else{
-    avisoStock=' · sin existencias (no pusiste cuánto salió)';
+    avisoStock+=' · sin existencias (no pusiste cuánto salió)';
   }
   }
   $('#modal').classList.remove('show');
