@@ -592,6 +592,13 @@ async function leerFacturaIA(){
         }
         const mat=emparejarMateria(p.nombre);
         const mm=materias.find(x=>x.nombre===mat);
+        // el lector no reconoció la materia y la dejó en unidades, pero en el catálogo va en kg/l:
+        // se usan los kilos del albarán, o unidades × tamaño del envase («MASCARPONE 2KG» × 4 = 8 kg)
+        let avisoUd='';
+        if(mm&&/^(kg|l)$/i.test(mm.unidad)&&String(p.unidad).toLowerCase()==='ud'){
+          if(p.kg_neto>0){cant=Number(p.kg_neto);avisoUd='Kilos del albarán: '+nEs(cant)+'.';}
+          else if(p.envase>0&&p.q_factura>0){cant=Math.round(p.q_factura*p.envase*1000)/1000;avisoUd=nEs(p.q_factura)+' envase(s) × '+nEs(p.envase)+' = '+nEs(cant)+' '+mm.unidad+'.';}
+        }
         if(mm)ud=mm.unidad;                      // la unidad manda la del catálogo
         return {
           materia:mat,
@@ -599,7 +606,7 @@ async function leerFacturaIA(){
           ud:ud,
           lote:limpiarLote(p.lote),
           cad:p.caducidad||'',
-          aviso:p.aviso||'',
+          aviso:avisoUd?(avisoUd+' '+(p.aviso||'').replace(/escribe los (kg|l|ud) que han entrado\.?/i,'')).trim():(p.aviso||''),
           leido:p.leido||null
         };
       });

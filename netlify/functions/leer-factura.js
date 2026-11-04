@@ -313,6 +313,9 @@ function resolver(l, cat, porNombre, proveedor) {
     lote,
     caducidad: l.caducidad || '',
     aviso,
+    // por si la app empareja la materia mejor que aquí y resulta estar en kg/l:
+    // con esto puede pasar las unidades leídas a peso sin volver a leer la factura
+    q_factura: redondea(q), ud_factura: udFac || '', kg_neto: (neto != null && !espejo) ? redondea(neto) : null, envase: envase || null,
     // lo que venía impreso, para contrastar. Si la columna de kilos solo repite
     // el nº de bultos no la enseñamos: no son kilos y confunde.
     leido: (() => {
