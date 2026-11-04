@@ -287,8 +287,12 @@ async function guardarEquiv(tipo,nombre,valor){
 // La base: un ingrediente por clave, con el nombre que más usan las recetas
 let _keyCache=new Map();
 const BASE={};
+// Lo que produce el obrador ("Pan pita casero", "Pan de burger", "Pan nórdico") es un producto en sí:
+// su nombre no se reduce a un ingrediente parecido ("pan"). Se rellena con los nombres de las recetas.
+const PROD_K=new Set();
 function construirBase(){
 Object.keys(BASE).forEach(k=>delete BASE[k]);
+PROD_K.clear(); RECETAS.forEach(r=>{const k=claveBase(String(r.n||'').split(/\s+[—(]/)[0]);if(k&&k.includes(' '))PROD_K.add(k);});
 RECETAS.forEach(r=>r.i.forEach(i=>{
   if(!i.q)return; const k=claveBase(i.n); if(!k||NO_INGREDIENTE.includes(k))return;
   const b=BASE[k]||(BASE[k]={k,nombres:{}}); b.nombres[i.n]=(b.nombres[i.n]||0)+1;
@@ -329,6 +333,7 @@ function keyDe(nombre){
   if(_keyCache.has(t))return _keyCache.get(t);
   const w=palabras(t), k=claveBase(t); let res=k;
   if(ALIAS[k]){_keyCache.set(t,ALIAS[k]);return ALIAS[k];}
+  if(PROD_K.has(k)&&!BASE[k]){_keyCache.set(t,k);return k;}   // un producto del obrador se queda con su nombre
   if(k&&!BASE[k]){
     const ks=Object.keys(BASE), wk=k.split(' ');
     // erratas: maicena → maizena, comimo → comino
